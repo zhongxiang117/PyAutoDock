@@ -1,4 +1,4 @@
-import logger
+from . import logger
 
 import collections
 import os
@@ -69,7 +69,10 @@ class SetupParLibrary:
                         key = AD_MAP_COEFFS._fields[fileds_coeff.index(ltmp[0].lower())]
                         coeff_dict[key] = float(ltmp[1])
                 elif len(ltmp) == 12 and ltmp[0].lower() == 'atom_par':
-                    pars.append([ltmp[1],*list(map(float,ltmp[2:8])),*list(map(int,ltmp[8:]))])
+                    try:
+                        pars.append([ltmp[1],*list(map(float,ltmp[2:8])),*list(map(int,ltmp[8:]))])
+                    except ValueError:
+                        logger.critical('wrong setting: {:}'.format(line))
                 else:
                     logger.warning('ignoring: line: {:}'.format(line))
         self.e = AD_MAP_COEFFS(**coeff_dict)

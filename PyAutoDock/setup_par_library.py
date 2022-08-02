@@ -1,4 +1,4 @@
-from . import logger
+from PyAutoDock import logger
 
 import collections
 import os

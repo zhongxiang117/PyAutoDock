@@ -1,5 +1,5 @@
-from . import logger
-from .utils import file_gen_new
+from PyAutoDock import logger
+from PyAutoDock.utils import file_gen_new
 
 import collections
 import os

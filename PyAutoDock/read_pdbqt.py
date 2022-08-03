@@ -52,7 +52,16 @@ class ReadPDBQT:
                     self.atoms.append([atomtype,atomname,x,y,z,charge])
         if not len(self.atoms): return
 
-        # now processing
+        atomtypelist = [i[0] for i in self.atoms]
+        self.atomset = set(atomtypelist)
+        for i in self.atomset:
+            key = i if i else 'undefined'
+            self.counter[key] = atomtypelist.count(i)
+
+        self._process()
+        self.info()
+
+    def _process(self):
         xtot = self.atoms[0][2]
         ytot = self.atoms[0][3]
         ztot = self.atoms[0][4]
@@ -74,6 +83,8 @@ class ReadPDBQT:
             self.total_charges += v[5]
         n = len(self.atoms)
         self.center = [xtot/n, ytot/n, ztot/n]
+
+    def info(self):
         logger.info('\n\nFor input Receptor file: {:}'.format(self.filename))
         logger.info('Receptor coordinates fit within the following volume:\n')
         logger.info('                   _______({:.6f} {:.6f} {:.6f})'.format(self.xmax,self.ymax,self.zmax))
@@ -87,22 +98,31 @@ class ReadPDBQT:
         logger.info('({:.6f} {:.6f} {:.6f})\n'.format(self.xmin,self.ymin,self.zmin))
         logger.info('Minimum Coordinates: ({:.6f} {:.6f} {:.6f})'.format(self.xmin,self.ymin,self.zmin))
         logger.info('Maximum Coordinates: ({:.6f} {:.6f} {:.6f})\n'.format(self.xmax,self.ymax,self.zmax))
-
-        atomtypelist = [i[0] for i in self.atoms]
-        atomset = set(atomtypelist)
-        for i in atomset:
-            key = i if i else 'undefined'
-            self.counter[key] = atomtypelist.count(i)
-
         logger.info('  Atomtype    Counters in Receptor')
         for k,v in self.counter.items():
             logger.info(' {:^10}         {:}'.format(k,v))
         logger.info('\n')
-
-        logger.info(f'Total number of atoms: {n}')
-        logger.info(f'Total number of atom types: {len(atomset)}')
+        logger.info(f'Total number of atoms: {len(self.atoms)}')
+        logger.info(f'Total number of atom types: {len(self.atomset)}')
         logger.info('Minimum charge: {:.6f} elementary charge'.format(self.qmin))
         logger.info('Maximum charge: {:.6f} elementary charge'.format(self.qmax))
         logger.info('Total charges : {:.6f} elementary charge'.format(self.total_charges))
+
+    def centroid(self,x=None,y=None,z=None):
+        if x:
+            dx = self.center[0] - x
+            for i in range(len(self.atoms)):
+                self.atoms[i][2] -= dx
+        if y:
+            dy = self.center[1] - y
+            for i in range(len(self.atoms)):
+                self.atoms[i][3] -= dy
+        if z:
+            dz = self.center[2] - z
+            for i in range(len(self.atoms)):
+                self.atoms[i][4] -= dz
+        if x or y or z:
+            self._process()
+            self.info()
 
 

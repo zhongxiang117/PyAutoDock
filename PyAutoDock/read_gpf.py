@@ -8,8 +8,9 @@ logger = logger.mylogger()
 
 # Future keys can be added into list, order matters, case-insensitive
 AD_GPF_KEYS = [
-    {'key':'npts',              'default':[0, 0, 0],},
-    {'key':'gridfld',           'default':None,     },
+    {'key':'parameter_file',    'default':None,     },
+    {'key':'npts',              'default':None,     },
+    {'key':'gridfld',           'default':'receptor.maps.fld',     },
     {'key':'spacing',           'default':0.375,    },
     {'key':'receptor_types',    'default':[],       },  # can be guessed from file
     {'key':'ligand_types',      'default':[],       },  # can be guessed from file
@@ -17,8 +18,8 @@ AD_GPF_KEYS = [
     {'key':'gridcenter',        'default':None,     },  # means `auto`
     {'key':'smooth',            'default':0.5,      },
     {'key':'map',               'default':[],       },
-    {'key':'elecmap',           'default':None,     },
-    {'key':'dsolvmap',          'default':None,     },
+    {'key':'elecmap',           'default':'receptor.e.map',     },
+    {'key':'dsolvmap',          'default':'receptor.d.map',     },
     {'key':'dielectric',        'default':-0.1465,  },
 ]
 
@@ -56,6 +57,7 @@ class ReadGPF:
                                 logger.critical('npts: not the even number: {:}'.format(line))
                             else:
                                 self.gpf[key] = t
+                                logger.info('>GPF: npts: {:}'.format(self.gpf[key]))
                     else:
                         logger.critical('npts: number of args should be 3: {:}'.format(line))
                 elif key == 'gridfld':
@@ -70,24 +72,29 @@ class ReadGPF:
                             self.gpf[key] = new
                         else:
                             self.gpf[key] = ltmp[1]
+                        logger.info('>GPF: gridfld: {:}'.format(self.gpf[key]))
                     else:
                         logger.critical('gridfld: number of args should be 2: {:}'.format(line))
                 elif key == 'spacing':
                     if len(ltmp) == 2:
                         try:
                             self.gpf[key] = float(ltmp[1])
+                            logger.info('>GPF: spacing: {:}'.format(self.gpf[key]))
                         except ValueError:
                             logger.critical('spacing: not a number: {:}'.format(line))
                     else:
                         logger.critical('spacing: number of args should be 2: {:}'.format(line))
                 elif key == 'receptor_types':
                     self.gpf[key].extend(ltmp[1:])
+                    logger.info('>GPF: receptor_types: {:}'.format(self.gpf[key]))
                 elif key == 'ligand_types':
                     self.gpf[key].extend(ltmp[1:])
+                    logger.info('>GPF: ligand_types: {:}'.format(self.gpf[key]))
                 elif key == 'receptor':
                     if len(ltmp) == 2:
                         if os.path.isfile(ltmp[1]):
                             self.gpf[key] = ltmp[1]
+                            logger.info('>GPF: receptor: {:}'.format(self.gpf[key]))
                         else:
                             logger.critical('not a file: {:}'.format(line))
                     else:
@@ -99,6 +106,7 @@ class ReadGPF:
                     elif len(ltmp) == 4:
                         try:
                             self.gpf[key] = list(map(float,ltmp[1:]))
+                            logger.info('>GPF: gridcenter: {:}'.format(self.gpf[key]))
                         except ValueError:
                             logger.critical('gridcenter: value error: {:}'.format(line))
                     else:
@@ -107,6 +115,7 @@ class ReadGPF:
                     if len(ltmp) == 2:
                         try:
                             self.gpf[key] = float(ltmp[1])
+                            logger.info('>GPF: smooth: {:}'.format(self.gpf[key]))
                         except ValueError:
                             logger.critical('smooth: not a number: {:}'.format(line))
                     else:
@@ -123,6 +132,7 @@ class ReadGPF:
                             self.gpf[key] = new
                         else:
                             self.gpf[key] = i
+                    logger.info('>GPF: map: {:}'.format(self.gpf[key]))
                 elif key == 'elecmap':
                     if len(ltmp) == 2:
                         if os.path.isfile(ltmp[1]):
@@ -135,6 +145,7 @@ class ReadGPF:
                             self.gpf[key] = new
                         else:
                             self.gpf[key] = ltmp[1]
+                        logger.info('>GPF: elecmap: {:}'.format(self.gpf[key]))
                     else:
                         logger.critical('elecmap: number of args should be 2: {:}'.format(line))
                 elif key == 'dsolvmap':
@@ -149,12 +160,14 @@ class ReadGPF:
                             self.gpf[key] = new
                         else:
                             self.gpf[key] = ltmp[1]
+                        logger.info('>GPF: dsolvmap: {:}'.format(self.gpf[key]))
                     else:
                         logger.critical('dsolvmap: number of args should be 2: {:}'.format(line))
                 elif key == 'dielectric':
                     if len(ltmp) == 2:
                         try:
                             self.gpf[key] = float(ltmp[1])
+                            logger.info('>GPF: dielectric: {:}'.format(self.gpf[key]))
                         except ValueError:
                             logger.critical('dielectric: not a number: {:}'.format(line))
                     else:

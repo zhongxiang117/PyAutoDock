@@ -64,6 +64,8 @@ class SetupParLibrary:
                 new = self._strip_comments(line)
                 if not len(new): continue
                 ltmp = new.split()
+                # convert dash to underscore
+                ltmp[0] = ltmp[0].replace('-','_')
                 if len(ltmp) == 2:
                     if ltmp[0].lower() in fileds_coeff:
                         key = AD_MAP_COEFFS._fields[fileds_coeff.index(ltmp[0].lower())]

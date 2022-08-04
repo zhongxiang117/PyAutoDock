@@ -14,7 +14,7 @@ AD_MAP_COEFFS = collections.namedtuple(
 
 AD_MAP_ATOM = collections.namedtuple(
     'AD_MAP_ATOM',(
-        'atomtype Rii epsii vol solpar Rij_hb epsij_hb hbond '  # space is important
+        'atomtype Rij epsij vol solpar Rij_hb epsij_hb hbond '  # space is important
         'rec_index map_index bond_index'
     ),
     defaults=[-1.0 for i in range(11)]
@@ -47,10 +47,13 @@ class SetupParLibrary:
         self._read(self.filename)
         self._atomtypes = [i.atomtype.lower() for i in self.atoms]
 
-    def get_atom_par(self,atomtype):
-        if atomtype.lower() in self._atomtypes:
+    def get_atom_par(self,atomtype,cases=None):
+        """get atom parameter (collection.namedtuple) based on whether
+        case-sensitive(cases=True) or case-insensitive(others),
+        return None if not found"""
+        if cases is not True: atomtype = atomtype.lower()
+        if atomtype in self._atomtypes:
             return self.atoms[self._atomtypes.index(atomtype.lower())]
-        logger.warning('not defined: atomtype: {:}'.format(atomtype))
         return None
 
     def _read(self,filename=None):

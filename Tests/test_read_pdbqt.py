@@ -44,6 +44,10 @@ class TestReadGPF(unittest.TestCase):
         f = ReadPDBQT('Data/receptor-format-2-good.pdbqt')
         self.assertEqual(counter,f.counter)
 
+    def test_read_pdbqt_centroid(self):
+        f = ReadPDBQT('Data/receptor-format-1-original.pdbqt')
+        f.centroid(32.961,7.860,27.277)
+        self.assertTrue(allclose(f.center, [32.961,7.860,27.277], tol=0.001))
 
 if __name__ == '__main__':
     unittest.main()

@@ -123,10 +123,10 @@ class ReadGPF:
                 elif key == 'map':
                     for i in ltmp[1:]:
                         if os.path.isfile(i):
-                            logger.warning('elecmap: file exit: {:}'.format(i))
+                            logger.warning('map: file exit: {:}'.format(i))
                             new = file_gen_new(i)
                             logger.info(
-                                'elecmap: changing filename from {:} to {:} to'
+                                'map: changing filename from {:} to {:} to'
                                 'avoid overwritting'.format(i,new)
                             )
                             self.gpf[key] = new

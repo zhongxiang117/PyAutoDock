@@ -107,14 +107,20 @@ class SetupMolMaps:
         # we do not need build the very big table, slightly bigger than box is OK
         points = (max(GPF.gpf['npts'])+5) * 100
         if GPF.gpf['dielectric'] > 0:
+            #TODO factor not known
             logger.info('Using a *constant* dielectric: {:}'.format(GPF.gpf['dielectric']))
             EPSTable = [1.0 for i in range(points)]
         else:
             EPSTable = [calc_ddd_Mehler_Solmajer(i/100.0) for i in range(points)]
             logger.info('Using *distance-dependent* dielectric function of Mehler and Solmajer, Prot.Eng.4, 903-910.')
-            logger.debug('  d   Dielectric')
-            for i in range(0,min(300,points),10):
-                logger.debug('{:4.1f}{:9.2f}'.format(EPSTable[i]))
+            if logger.level < 10:
+                logger.debug('printout distance table\n')
+                print('  d   Dielectric')
+                for i in range(0,min(300,points),10):
+                    print('{:4.1f}{:9.2f}'.format(EPSTable[i]))
+                print()
+            for i in range(len(EPSTable)):
+                EPSTable[i] = 332.06363 / EPSTable[i]
 
         prec = []
         for a in GPF.gpf['receptor_types']:
@@ -132,6 +138,9 @@ class SetupMolMaps:
             else:
                 logger.critical('not defined: ligand_types: {:}'.format(a))
         
+        # calculate receptor atoms distance map
+        #TODO awaits negotiation, takes too much memory
+
         MAPS = []
         for i in range(len(GPF.gpf['ligand_types'])):
             m = GridMap(num_receptor_maps=len(GPF.gpf['receptor_types']))
@@ -163,6 +172,7 @@ class SetupMolMaps:
                     m.nbp_r[j] = p.Rij_hb
                     m.nbp_eps[j] = p.epsij_hb
             MAPS.append(m)
+
         if logger.level < 10:
             print('\n')
             for i,a in enumerate(GPF.gpf['ligand_types']):
@@ -184,8 +194,120 @@ class SetupMolMaps:
                     )
             print('\n')
 
+        #TODO parameter inside GPF
+        Disorder_h = False
 
-
+        # for hbond maps
+        # format:
+        #        index         hbond         index      rexp    vector    disorder  normvector
+        #   [(atom_i_index, atom_i_hbond, atom_j_index, rexp, (rx,ry,rz), disorder), ...]
+        #   [(atom_i_index, atom_i_hbond, atom_j_index, rexp, (rx,ry,rz), disorder, (nx,ny,nz)), ...]
+        #
+        # important:
+        #   a) some indexes are missing
+        #   b) increasing firstly by atom_i_index, then by atom_j_index
+        Tol = 0.00000001
+        HBMAPS = []
+        for ia,a in enumerate(MOL.atoms):
+            ha = LIB.get_atom_hbond(a[0])
+            if ha == 2:     # D1
+                for jb,b in enumerate(MOL.atoms):
+                    if ia == jb: continue
+                    v = [a[t]-b[t] for t in range(2,5)]
+                    dd = max(sum([t*t for t in v]), Tol)
+                    if dd < 1.90:
+                        btype = b[0].upper()
+                        bo = False
+                        if btype == 'OA' or btype == 'SA':
+                            rexp = 4
+                            if Disorder_h:
+                                bo = True
+                        else:
+                            rexp = 2
+                        dinv = 1.0 / pow(dd,0.5)
+                        v = tuple([t*dinv for t in v])
+                        HBMAPS.append((ia,ha,jb,rexp,v,bo))
+                        #TODO only find one of them??
+                        break
+            elif ha == 5:   # A2
+                nbond = 0
+                j1 = 0
+                j2 = 0
+                for jb,b in enumerate(MOL.atoms):
+                    if ia == jb: continue
+                    v = [a[t]-b[t] for t in range(2,5)]
+                    dd = max(sum([t*t for t in v]), Tol)
+                    btype = b[0].upper()
+                    if (dd < 3.61 and (btype != 'HD' and btype != 'H')) or \
+                        (dd < 1.69 and (btype == 'HD' or btype == 'H')):
+                        if nbond == 0:
+                            nbond == 1
+                            j1 = jb
+                        elif nbond == 1:
+                            nbond == 2
+                            j2 = jb
+                        else:
+                            logger.warning(
+                                'Found an H-bonding atom with three bonded atoms, '
+                                'atom serial number {:}'.format(ia+1)
+                            )
+                if nbond == 0:
+                    logger.warning(f'Oxygen atom found with no bonded atoms, atom serial number: {ia+1}')
+                elif nbond == 1:        # one bond: carbonyl oxygen: O=C-X
+                    v1 = [a[t]-MOL.atoms[j1][t] for t in range(2,5)]
+                    dd1 = max(sum([t*t for t in v1]), Tol)
+                    d1inv = 1.0 / pow(dd1,0.5)
+                    v1 = tuple([t*d1inv for t in v1])
+                    v2 = None
+                    # try to find second
+                    for j2,c in enumerate(MOL.atoms):
+                        if j2 == ia or j2 == j1: continue
+                        vd = [c[t]-b[t] for t in range(2,5)]
+                        dd2 = max(sum([t*t for t in vd]), Tol)
+                        btype = c[0].upper()
+                        if (dd2 < 2.89 and btype != 'HD') or (dd2 < 1.69 and btype == 'HD'):
+                            d2inv = 1.0 / pow(dd2,0.5) 
+                            vd = [t*d2inv for t in vd]
+                            # C=O cross C-X to get long pair plane norm vector
+                            x = v1[1]*vd[2] - v1[2]*vd[1]
+                            y = -v1[0]*vd[2] + v1[2]*vd[0]
+                            z = v1[0]*vd[1] - v1[1]*vd[0]
+                            d = pow(max(x*x+y*y+z*z, Tol), 0.5)
+                            v2 = (x/d, y/d, z/d)
+                            break
+                    if not v2:
+                        logger.warning(f'Oxygen atom found only one bonded atom, atom serial number: {ia+1}')
+                        v2 = (0.0, 0.0, 0.0)
+                    HBMAPS.append((ia,ha,jb,rexp,v1,Disorder_h,v2))
+                elif nbond == 2:
+                    btype1 = MOL.atoms[j1][0].upper()
+                    btype2 = MOL.atoms[j2][0].upper()
+                    if Disorder_h and (btype1 == 'HD' or btype2 == 'HD') and (btype1 != btype2):
+                        ndx = None
+                        if btype1 == 'A' or btype1 == 'C': ndx = j1
+                        if btype1 == 'A' or btype2 == 'C': ndx = j2
+                        if not ndx:
+                            ndx = 0
+                            logger.warning('parameters error')
+                        v = [a[t]-MOL.atoms[ndx][t] for t in range(2,5)]
+                        dd = max(sum([t*t for t in v]), Tol)
+                        dinv = 1.0 / pow(dd,0.5)
+                        v = tuple([t*dinv for t in v])
+                        HBMAPS.append((ia,ha,jb,rexp,v,True))
+                    else:
+                        v2 = [MOL.atoms[j2][t]-MOL.atoms[j1][t] for t in range(2,5)]
+                        dd2 = max(sum([t*t for t in v2]), Tol)
+                        d2inv = 1.0 / pow(dd2,0.5)
+                        v2 = tuple([t*dinv for t in v2])
+                        
+                        dot = sum([(a[t+2]-MOL.atom[j1][t+2])*v2[t] for t in range(3)])
+                        v1 = [a[t+2] - (dot*v2[t]+MOL.atoms[j1][t+2]) for t in range(3)]
+                        dd1 = max(sum([t*t for t in v1]), Tol)
+                        d1inv = 1.0 / pow(dd1,0.5)
+                        v1 = tuple([t*dinv for t in v1])
+                        HBMAPS.append((ia,ha,jb,rexp,v1,False,v2))
+                else:
+                    logger.critical('How can it be??')
 
 
 

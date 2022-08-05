@@ -45,15 +45,20 @@ class SetupParLibrary:
         self.filename = filename
         self.atoms = []
         self._read(self.filename)
-        self._atomtypes = [i.atomtype.lower() for i in self.atoms]
+        self.atomtypes = [i.atomtype.lower() for i in self.atoms]
+    
+    def get_atom_hbond(self,atomtype,cases=None):
+        atom = self.get_atom_par(atomtype,cases)
+        if not atom: return 0
+        return atom.hbond
 
     def get_atom_par(self,atomtype,cases=None):
         """get atom parameter (collection.namedtuple) based on whether
         case-sensitive(cases=True) or case-insensitive(others),
         return None if not found"""
         if cases is not True: atomtype = atomtype.lower()
-        if atomtype in self._atomtypes:
-            return self.atoms[self._atomtypes.index(atomtype.lower())]
+        if atomtype in self.atomtypes:
+            return self.atoms[self.atomtypes.index(atomtype.lower())]
         return None
 
     def _read(self,filename=None):

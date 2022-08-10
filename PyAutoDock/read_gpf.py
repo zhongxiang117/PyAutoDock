@@ -129,9 +129,9 @@ class ReadGPF:
                                 'map: changing filename from {:} to {:} to'
                                 'avoid overwritting'.format(i,new)
                             )
-                            self.gpf[key] = new
+                            self.gpf[key].append(new)
                         else:
-                            self.gpf[key] = i
+                            self.gpf[key].append(i)
                     logger.info('>GPF: map: {:}'.format(self.gpf[key]))
                 elif key == 'elecmap':
                     if len(ltmp) == 2:

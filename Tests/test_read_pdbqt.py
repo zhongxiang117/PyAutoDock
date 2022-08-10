@@ -2,6 +2,9 @@ from PyAutoDock.read_pdbqt import ReadPDBQT
 from utils import allclose
 
 import unittest
+import os
+
+CWD = os.path.split(os.path.abspath(__file__))[0]
 
 
 class TestReadGPF(unittest.TestCase):
@@ -25,7 +28,7 @@ class TestReadGPF(unittest.TestCase):
         qmax = 0.665
         qmin = -0.648
 
-        f = ReadPDBQT('Data/receptor-format-1-original.pdbqt')
+        f = ReadPDBQT(os.path.join(CWD,'Data/receptor-format-1-original.pdbqt'))
         self.assertEqual(total_atomnum,len(f.atoms))
         self.assertEqual(counter,f.counter)
         self.assertTrue(allclose([qtot,qmax,qmin],[f.total_charges,f.qmax,f.qmin],tol=0.001))
@@ -41,11 +44,11 @@ class TestReadGPF(unittest.TestCase):
             'H' : 2,
             'HS': 4,
         }
-        f = ReadPDBQT('Data/receptor-format-2-good.pdbqt')
+        f = ReadPDBQT(os.path.join(CWD,'Data/receptor-format-2-good.pdbqt'))
         self.assertEqual(counter,f.counter)
 
     def test_read_pdbqt_centroid(self):
-        f = ReadPDBQT('Data/receptor-format-1-original.pdbqt')
+        f = ReadPDBQT(os.path.join(CWD,'Data/receptor-format-1-original.pdbqt'))
         f.centroid(32.961,7.860,27.277)
         self.assertTrue(allclose(f.center, [32.961,7.860,27.277], tol=0.001))
 

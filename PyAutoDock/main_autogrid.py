@@ -8,7 +8,7 @@ import os
 import sys
 
 logger = mylogger()
-
+logger.setLevel(10)
 
 class GridMap:
     def __init__(self,num_receptor_maps=None,*args,**kwargs):
@@ -35,12 +35,20 @@ class GridMap:
         self.hbonder = [0 for i in range(num_receptor_maps)]    # int
 
 
-class SetupMolMaps:
+class SetupMaps:
+    """setup receptor/ligand interactions grid maps
+
+    Args:
+        library_filename(str)       : library file
+        ligand_gpf_filename(str)    : grid parameter file
+        receptor_mol_filename(str)  : file for receptor, it takes highest precedence
+    """
     def __init__(self,library_filename,ligand_gpf_filename,receptor_mol_filename=None,*args,**kwargs):
         self.library_filename = library_filename
         self.receptor_mol_filename = receptor_mol_filename if receptor_mol_filename else None
         self.ligand_gpf_filename = ligand_gpf_filename
         self.maps = []
+        self.gen()
 
     def gen(self):
         LIB = SetupParLibrary(self.library_filename)
@@ -100,8 +108,8 @@ class SetupMolMaps:
             logger.info('map: {:}'.format(GPF.gpf['map']))
 
         # check receptor_types and its maps
-        if len(GPF.gpf['receptor_types']) != (GPF.gpf['map']):
-            logger.critical('not equal: number of entries in: receptor_types & map')
+        if len(GPF.gpf['ligand_types']) != len(GPF.gpf['map']):
+            logger.critical('not equal: number of entries in: ligand_types & map')
 
         # epsilon distance lookup table
         # we do not need build the very big table, slightly bigger than box is OK
@@ -112,13 +120,13 @@ class SetupMolMaps:
             EPSTable = [1.0 for i in range(points)]
         else:
             EPSTable = [calc_ddd_Mehler_Solmajer(i/100.0) for i in range(points)]
+            EPSTable[0] = 1.0   # important
             logger.info('Using *distance-dependent* dielectric function of Mehler and Solmajer, Prot.Eng.4, 903-910.')
-            if logger.level < 10:
+            if logger.level <= 10:
                 logger.debug('printout distance table\n')
-                print('  d   Dielectric')
+                print('   d     Dielectric')
                 for i in range(0,min(300,points),10):
-                    print('{:4.1f}{:9.2f}'.format(EPSTable[i]))
-                print()
+                    print('{:>5.1f} {:>9.2f}'.format(i/100,EPSTable[i]))
             for i in range(len(EPSTable)):
                 EPSTable[i] = 332.06363 / EPSTable[i]
 
@@ -158,10 +166,10 @@ class SetupMolMaps:
             for j in range(len(GPF.gpf['receptor_types'])):
                 p = prec[j]
                 m.nbp_r[j] = (m.Rij + p.Rij) / 2.0
-                m.nbp_eps = pow(m.epsij*p.epsij, 0.5)
+                m.nbp_eps[j] = pow(m.epsij*p.epsij, 0.5)
                 m.xA[j] = 12
                 m.xB[j] = 6
-                if m.hbonder > 2 and p.hbond in [1,2]:
+                if m.hbond > 2 and p.hbond in [1,2]:
                     m.xB[j] = 10
                     m.hbonder[j] = True
                     m.nbp_r[j] = m.Rij_hb
@@ -173,14 +181,14 @@ class SetupMolMaps:
                     m.nbp_eps[j] = p.epsij_hb
             MAPS.append(m)
 
-        if logger.level < 10:
-            print('\n')
+        if logger.level <= 10:
+            print()
             for i,a in enumerate(GPF.gpf['ligand_types']):
                 m = MAPS[i]
                 print('\nFor ligand type: {:}'.format(a))
                 print(
                     'is_hbonder={:}, hbond={:}, sol={:.8f}, vol={:.6f}, Rij={:.3f}, '
-                    'epsij={:.3f}, Rij_hb={:.3f}, epsij_hb={:.3f}'.format(
+                    'epsij={:.4f}, Rij_hb={:.4f}, epsij_hb={:.4f}'.format(
                         m.is_hbonder, m.hbond, m.sol, m.vol, m.Rij, m.epsij,
                         m.Rij_hb, m.epsij_hb
                     )
@@ -188,12 +196,65 @@ class SetupMolMaps:
                 for j,r in enumerate(GPF.gpf['receptor_types']):
                     print(
                         '>> receptor_atomtype={:}, hbonder={:}, xA={:}, xB={:}, '
-                        'nbp_r={:.3f}, nbp_eps={:.3f}'.format(
+                        'nbp_r={:.4f}, nbp_eps={:.4f}'.format(
                             r, m.hbonder[j], m.xA[j], m.xB[j], m.nbp_r[j], m.nbp_eps[j]
                         )
                     )
-            print('\n')
 
+        Tol = 0.00000001
+        EINTCLAMP = 100000
+        EvdWHBondTable = [
+            [
+                [0.0 for i in range(len(GPF.gpf['ligand_types']))]
+                for j in range(len(GPF.gpf['receptor_types']))
+            ]
+            for k in range(points)
+        ]
+        for i in range(len(GPF.gpf['ligand_types'])):
+            if MAPS[i].is_covalent:
+                logger.info('For covalent map: any internal non-bonded parameters will be ignored')
+                logger.info('covalent map: ligand_type={:}'.format(GPF.gpf['ligand_types'][i]))
+                continue
+            m = MAPS[i]
+            for j in range(len(GPF.gpf['receptor_types'])):
+                tmp = m.nbp_eps[j] / (m.xA[j]-m.xB[j])
+                m.cA[j] = tmp * pow(m.nbp_r[j],m.xA[j]) * m.xB[j]
+                m.cB[j] = tmp * pow(m.nbp_r[j],m.xB[j]) * m.xA[j]
+                for k in range(1,points):
+                    r = k / 100.0
+                    rA = pow(r,m.xA[j])
+                    rB = pow(r,m.xB[j])
+                    EvdWHBondTable[k][j][i] = min(EINTCLAMP,m.cA[j]/rA-m.cB[j]/rB)
+                EvdWHBondTable[0][j][i] = EINTCLAMP
+                EvdWHBondTable[points-1][j][i] = 0.0
+
+                # smooth
+                n = int(GPF.gpf['smooth'] * 100 / 2)
+                if n > 0:
+                    for k in range(points):
+                        for s in range(max(0,k-n), min(points,k+n+1)):
+                            EvdWHBondTable[s][j][i] = min(EvdWHBondTable[s][j][i], EINTCLAMP)
+
+            if logger.level <= 10:
+                print('\n\nPairwise interactions:')
+                out = '>> {:>3}-'.format(GPF.gpf['ligand_types'][i])
+                for j,v in enumerate(GPF.gpf['receptor_types']):
+                    tmpa = 'cA={:.2f} / {:}'.format(m.cA[j],m.xA[j])
+                    tmpb = 'cB={:.2f} / {:}'.format(m.cB[j],m.xB[j])
+                    print(out+'{:<3}   {:30}   {:}'.format(v,tmpa,tmpb))
+
+                print('\n\nLowest pairwise interaction energy within {:} Angstrom'.format(GPF.gpf['smooth']))
+                print('>> Atomtype: {:}'.format(GPF.gpf['ligand_types'][i]))
+                print('  r      A         C         H         HD        N        NA        OA        SA')
+                print(' ___ _________ _________ _________ _________ _________ _________ _________ _________')
+                for t in range(0,min(points,510),10):
+                    out = '{:4.1f} '.format(t/100)
+                    for j in range(len(GPF.gpf['receptor_types'])):
+                        out += '{:9.2f} '.format(EvdWHBondTable[t][j][i])
+                    print(out)
+                print()
+
+            return
         #TODO parameter inside GPF
         Disorder_h = False
 

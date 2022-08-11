@@ -29,12 +29,15 @@ class ReadGPF:
 
     keys will be smartly picked, case-insensitive, orders does not matter
     """
-    def __init__(self,filename=None,*args,**kwargs):
+    def __init__(self,filename=None,loglevel=None,*args,**kwargs):
+        level = logger.level
+        if loglevel: logger.setLevel(loglevel)
         self.filename = filename
         self.gpf = collections.OrderedDict()
         for k in AD_GPF_KEYS:
             self.gpf[k['key'].lower()] = k['default']
         self._read()
+        logger.setLevel(level)      # restore
 
     def _read(self):
         if not os.path.isfile(self.filename):

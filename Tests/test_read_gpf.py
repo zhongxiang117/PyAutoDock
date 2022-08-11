@@ -8,10 +8,10 @@ CWD = os.path.split(os.path.abspath(__file__))[0]
 class TestReadGPF(unittest.TestCase):
 
     def test_read(self):
-        GPF_0 = ReadGPF(os.path.join(CWD,'Data/grid-format-0-original.gpf'))
-        GPF_1 = ReadGPF(os.path.join(CWD,'Data/grid-format-1-simplest.gpf'))
-        GPF_2 = ReadGPF(os.path.join(CWD,'Data/grid-format-2-goodfull.gpf'))
-        GPF_3 = ReadGPF(os.path.join(CWD,'Data/grid-format-3-goodpart.gpf'))
+        GPF_0 = ReadGPF(os.path.join(CWD,'Data/grid-format-0-original.gpf'),loglevel=100)
+        GPF_1 = ReadGPF(os.path.join(CWD,'Data/grid-format-1-simplest.gpf'),loglevel=100)
+        GPF_2 = ReadGPF(os.path.join(CWD,'Data/grid-format-2-goodfull.gpf'),loglevel=100)
+        GPF_3 = ReadGPF(os.path.join(CWD,'Data/grid-format-3-goodpart.gpf'),loglevel=100)
         # test on file 0 and 1
         self.assertEqual(GPF_0.gpf['gridfld'], GPF_1.gpf['gridfld'])
         # test on file 0 and 2

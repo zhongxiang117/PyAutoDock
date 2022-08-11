@@ -109,6 +109,9 @@ class ReadPDBQT:
         logger.info('Total charges : {:.6f} elementary charge'.format(self.total_charges))
 
     def centroid(self,x=None,y=None,z=None):
+        """centroid molecule at [x,y,z], if any one of them exists.
+           otherwise, centroid at the center.
+        """
         if x:
             dx = self.center[0] - x
             for i in range(len(self.atoms)):
@@ -121,6 +124,23 @@ class ReadPDBQT:
             dz = self.center[2] - z
             for i in range(len(self.atoms)):
                 self.atoms[i][4] -= dz
+        if x or y or z:
+            self._process()
+            self.info()
+        else:
+            self.translate(*self.center)
+
+    def translate(self,x=None,y=None,z=None):
+        """translate molecule to x, y, or z, if any one of them exists"""
+        if x:
+            for i in range(len(self.atoms)):
+                self.atoms[i][2] -= x
+        if y:
+            for i in range(len(self.atoms)):
+                self.atoms[i][3] -= y
+        if z:
+            for i in range(len(self.atoms)):
+                self.atoms[i][4] -= z
         if x or y or z:
             self._process()
             self.info()

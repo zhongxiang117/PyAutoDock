@@ -307,22 +307,27 @@ class SetupMaps:
 
         # for hbond maps
         # format:
-        #        index         hbond         index      rexp    vector    disorder  normvector
-        #   [(atom_i_index, atom_i_hbond, atom_j_index, rexp, (rx,ry,rz), disorder), ...]
-        #   [(atom_i_index, atom_i_hbond, atom_j_index, rexp, (rx,ry,rz), disorder, (nx,ny,nz)), ...]
+        #      vector     disorder  rexp   normvector
+        #   [(rx,ry,rz), ...                    ]
+        #   [((rx,ry,rz), disorder, rexp), ...  ]
+        #   [((rx,ry,rz), (nx,ny,nz)), ...      ]
         #
         # important:
         #   a) some indexes are missing
-        #   b) increasing firstly by atom_i_index, then by atom_j_index
+        #   b) corresponding to the order
         HBMAPS = []
+        HBONDTYPES = []
         for ia,a in enumerate(MOL.atoms):
             ha = LIB.get_atom_hbond(a[0])
+            HBONDTYPES.append(ha)
             if ha == 2:     # D1
+                boset = False
                 for jb,b in enumerate(MOL.atoms):
                     if ia == jb: continue
                     v = [a[t]-b[t] for t in range(2,5)]
                     dd = sum([t*t for t in v])
                     if dd < 1.90:
+                        boset = True
                         btype = b[0].upper()
                         bo = False
                         if btype == 'OA' or btype == 'SA':
@@ -335,10 +340,13 @@ class SetupMaps:
                         dd = max(dd, tol)
                         dinv = 1.0 / pow(dd,0.5)
                         v = tuple([t*dinv for t in v])
-                        HBMAPS.append((ia,ha,jb,rexp,v,bo))
+                        HBMAPS.append((v,bo,rexp))
                         #print('ia=',ia,'jb=',jb,'v=',v,'rexp=',rexp)
                         # Question: only find one of them??
                         break
+                if not boset:
+                    logger.warning(f'Hydrogen bond: Receptor atom index: {ia+1}')
+                    HBMAPS.append(((0.0,0.0,0.0),False,0))
             elif ha == 4:   # A1
                 nbond = 0
                 j1 = 0
@@ -388,7 +396,7 @@ class SetupMaps:
                     print('ha=4 nbond=3 ia=',ia,'j1=',j1,'v=',v)
                 else:
                     logger.critical('ha=4: How can it be??')
-                HBMAPS.append((ia,ha,0,0,tuple(v),Disorder_h))
+                HBMAPS.append(tuple(v))
             elif ha == 5:   # A2
                 nbond = 0
                 j1 = 0
@@ -439,7 +447,7 @@ class SetupMaps:
                         logger.warning(f'Oxygen atom found only one bonded atom, atom serial number: {ia+1}')
                         v2 = (0.0, 0.0, 0.0)
                     #print('ha=5 nbond=',nbond,'v1=',v1,'v2=',v2,'ia=',ia,'j1=',j1,'j2=',j2)
-                    HBMAPS.append((ia,ha,jb,0,v1,Disorder_h,v2))
+                    HBMAPS.append((v1,v2))
                 elif nbond == 2:
                     btype1 = MOL.atoms[j1][0].upper()
                     btype2 = MOL.atoms[j2][0].upper()
@@ -455,7 +463,7 @@ class SetupMaps:
                         dd = max(sum([t*t for t in v]), tol)
                         dinv = 1.0 / pow(dd,0.5)
                         v = tuple([t*dinv for t in v])
-                        HBMAPS.append((ia,ha,jb,0,v,True))
+                        HBMAPS.append(v)
                     else:
                         v2 = [MOL.atoms[j2][t]-MOL.atoms[j1][t] for t in range(2,5)]
                         dd2 = max(sum([t*t for t in v2]), tol)
@@ -467,7 +475,7 @@ class SetupMaps:
                         dd1 = max(sum([t*t for t in v1]), tol)
                         d1inv = 1.0 / pow(dd1,0.5)
                         v1 = tuple([t*d1inv for t in v1])
-                        HBMAPS.append((ia,ha,jb,0,v1,False,v2))
+                        HBMAPS.append((v1,v2))
                     #print('ha=5 nbond=',nbond,'v1=',v1,'v2=',v2,'ia=',ia,'j1=',j1,'j2=',j2)
                 else:
                     logger.critical('ha=5: How can it be??')
@@ -491,15 +499,29 @@ class SetupMaps:
                 for ix in range(-hnpts[0],hnpts[0]):
                     c[0] = ix * GPF.gpf['spacing']
 
-                    for a in MOL.atoms:
+                    # find closest Hbond
+                    rmin = 999999.0
+                    closestH = 0
+                    for i,a in enumerate(MOL.atoms):
+                        ha = HBONDTYPES[i]
+                        if ha == 1 or ha == 2:
+                            d = [a[t+2]-c[t] for t in range(3)]
+                            vv = sum([t*t for t in d])
+                            if vv < rmin:
+                                rmin = vv
+                                closestH = i
+                    d = [MOL.atoms[closestH][t+2]-c[t] for t in range(3)]
+                    rmin = pow(sum([t*t for t in d]), 0.5)
+
+                    for ia,a in enumerate(MOL.atoms):
                         d = [a[t+2]-c[t] for t in range(3)]
                         vv = max(sum([t*t for t in d]),tol)
                         r = pow(vv,0.5)
                         d = [t/r for t in d]
                         inv_rmax = 1.0 / max(r,0.5)
 
-                        index_r = min(int(r*100+0.6), 16384-1)       #TODO
-                        index_n = min(int(r*100+0.6), 131072-1)
+                        index_r = min(int(r*100+0.6), 16383)       #TODO
+                        index_n = min(int(r*100+0.6), 131071)
 
                         if GPF.gpf['dielectric'] > 0:
                             #TODO test
@@ -512,9 +534,15 @@ class SetupMaps:
 
                         if Disorder_h and a[0].upper() == 'HD': continue
 
-                        ha = LIB.get_atom_hbond(a[0])
+                        ha = HBONDTYPES[ia]
+                        racc = 1.0
+                        rdon = 1.0
+                        Hramp = 1.0
                         if ha == 2:
-                            pass
+                            costheta = 0.0
+
+
+
 
 
 

@@ -45,8 +45,19 @@ class SetupParLibrary:
         self.filename = filename
         self.atoms = []
         self._read(self.filename)
-        self.atomtypes = [i.atomtype.lower() for i in self.atoms]
-    
+        self.atomtypes = {i.atomtype:j for i,j in enumerate(self.atoms)}
+        self.atomtypes_lower = {i.atomtype.lower():j for i,j in enumerate(self.atoms)}
+
+    def get_atom_vol(self,atomtype,cases=None):
+        atom = self.get_atom_par(atomtype,cases)
+        if not atom: return 0.0
+        return atom.vol
+
+    def get_atom_sol(self,atomtype,cases=None):
+        atom = self.get_atom_par(atomtype,cases)
+        if not atom: return 0.0
+        return atom.solpar
+
     def get_atom_hbond(self,atomtype,cases=None):
         atom = self.get_atom_par(atomtype,cases)
         if not atom: return 0
@@ -56,10 +67,15 @@ class SetupParLibrary:
         """get atom parameter (collection.namedtuple) based on whether
         case-sensitive(cases=True) or case-insensitive(others),
         return None if not found"""
-        if cases is not True: atomtype = atomtype.lower()
-        if atomtype in self.atomtypes:
-            return self.atoms[self.atomtypes.index(atomtype.lower())]
-        return None
+        atom = None
+        if cases is True:
+            if atomtype in self.atomtypes:
+                atom = self.atoms[self.atomtypes[atomtype]]
+        else:
+            atomtype = atomtype.lower()
+            if atomtype in self.atomtypes_lower:
+                atom = self.atoms[self.atomtypes_lower[atomtype]]
+        return atom
 
     def _read(self,filename=None):
         if not filename: filename = self.filename

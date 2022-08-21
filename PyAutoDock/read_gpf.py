@@ -17,6 +17,7 @@ AD_GPF_KEYS = [
     {'key':'receptor',          'default':None,     },
     {'key':'gridcenter',        'default':None,     },  # means `auto`
     {'key':'smooth',            'default':0.5,      },
+    {'key':'qasp',              'default':0.01097,  },
     {'key':'map',               'default':[],       },
     {'key':'elecmap',           'default':'receptor.e.map',     },
     {'key':'dsolvmap',          'default':'receptor.d.map',     },
@@ -123,6 +124,15 @@ class ReadGPF:
                             logger.critical('smooth: not a number: {:}'.format(line))
                     else:
                         logger.critical('smooth: number of args should be 2: {:}'.format(line))
+                elif key == 'qasp':
+                    if len(ltmp) == 2:
+                        try:
+                            self.gpf[key] = float(ltmp[1])
+                            logger.info('>GPF: qasp: {:}'.format(self.gpf[key]))
+                        except ValueError:
+                            logger.critical('qasp: not a number: {:}'.format(line))
+                    else:
+                        logger.critical('qasp: number of args should be 2: {:}'.format(line))
                 elif key == 'map':
                     for i in ltmp[1:]:
                         if os.path.isfile(i):

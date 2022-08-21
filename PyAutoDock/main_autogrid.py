@@ -106,7 +106,7 @@ class SetupMaps:
                 if left:
                     logger.warning('not defined: receptor_types: {:}'.format(left))
                 if more:
-                    logger.warning('not included: receptor_types: {:}'.format(more))
+                    logger.critical('not included: receptor_types: {:}'.format(more))
         else:
             GPF.gpf['receptor_types'] = list(MOL.atomset)
             GPF.gpf['map'] = []     # reset
@@ -114,6 +114,7 @@ class SetupMaps:
                 GPF.gpf['map'].append(file_gen_new('receptor.{:}.map'.format(a)))
             logger.info('receptor_types: {:}'.format(GPF.gpf['receptor_types']))
             logger.info('map: {:}'.format(GPF.gpf['map']))
+        MOLATOMSINDEX = [GPF.gpf['receptor_types'].index(i[0]) for i in MOL.atoms]
 
         # check receptor_types and its maps
         if len(GPF.gpf['ligand_types']) != len(GPF.gpf['map']):
@@ -307,13 +308,13 @@ class SetupMaps:
 
         # for hbond maps
         # format:
-        #      vector     disorder  rexp   normvector
+        #      vector     rexp   normvector
         #   [(rx,ry,rz), ...                    ]
-        #   [((rx,ry,rz), disorder, rexp), ...  ]
+        #   [((rx,ry,rz), rexp), ...  ]
         #   [((rx,ry,rz), (nx,ny,nz)), ...      ]
         #
         # important:
-        #   a) some indexes are missing
+        #   a) values are in different formats
         #   b) corresponding to the order
         HBMAPS = []
         HBONDTYPES = []
@@ -329,24 +330,20 @@ class SetupMaps:
                     if dd < 1.90:
                         boset = True
                         btype = b[0].upper()
-                        bo = False
                         if btype == 'OA' or btype == 'SA':
                             rexp = 4
-                            if Disorder_h:
-                                #TODO test
-                                bo = True
                         else:
                             rexp = 2
                         dd = max(dd, tol)
                         dinv = 1.0 / pow(dd,0.5)
                         v = tuple([t*dinv for t in v])
-                        HBMAPS.append((v,bo,rexp))
+                        HBMAPS.append((v,rexp))
                         #print('ia=',ia,'jb=',jb,'v=',v,'rexp=',rexp)
                         # Question: only find one of them??
                         break
                 if not boset:
                     logger.warning(f'Hydrogen bond: Receptor atom index: {ia+1}')
-                    HBMAPS.append(((0.0,0.0,0.0),False,0))
+                    HBMAPS.append(((0.0,0.0,0.0),0))
             elif ha == 4:   # A1
                 nbond = 0
                 j1 = 0
@@ -421,6 +418,7 @@ class SetupMaps:
                             )
                 if nbond == 0:
                     logger.warning(f'Oxygen atom found with no bonded atoms, atom serial number: {ia+1}')
+                    HBMAPS.append(((0.0,0.0,0.0),(0.0,0.0,0.0)))
                 elif nbond == 1:        # one bond: carbonyl oxygen: O=C-X
                     v1 = [a[t]-MOL.atoms[j1][t] for t in range(2,5)]
                     dd1 = max(sum([t*t for t in v1]), tol)
@@ -463,7 +461,7 @@ class SetupMaps:
                         dd = max(sum([t*t for t in v]), tol)
                         dinv = 1.0 / pow(dd,0.5)
                         v = tuple([t*dinv for t in v])
-                        HBMAPS.append(v)
+                        HBMAPS.append((v,(0.0,0.0,0.0)))
                     else:
                         v2 = [MOL.atoms[j2][t]-MOL.atoms[j1][t] for t in range(2,5)]
                         dd2 = max(sum([t*t for t in v2]), tol)
@@ -479,6 +477,8 @@ class SetupMaps:
                     #print('ha=5 nbond=',nbond,'v1=',v1,'v2=',v2,'ia=',ia,'j1=',j1,'j2=',j2)
                 else:
                     logger.critical('ha=5: How can it be??')
+            else:
+                HBMAPS.append((0.0,0.0,0.0))
 
         totmaps = len(GPF.gpf['ligand_types'])+2
         logger.info('Beginning grid calculation')
@@ -498,6 +498,10 @@ class SetupMaps:
                 c[1] = iy * GPF.gpf['spacing']
                 for ix in range(-hnpts[0],hnpts[0]):
                     c[0] = ix * GPF.gpf['spacing']
+
+                    hbondmin = [999999.0 for t in range(totmaps-2)]
+                    hbondmax = [-999999.0 for t in range(totmaps-2)]
+                    hbondflag = [False for t in range(totmaps-2)]
 
                     # find closest Hbond
                     rmin = 999999.0
@@ -539,21 +543,99 @@ class SetupMaps:
                         rdon = 1.0
                         Hramp = 1.0
                         if ha == 2:
-                            costheta = 0.0
+                            v,rexp = HBMAPS[ia]
+                            costheta = 0.0 - sum([d[t]*v[t] for t in range(3)])
+                            if costheta <= 0:
+                                racc = 0.0
+                            else:
+                                c2 = costheta * costheta
+                                if rexp == 2:
+                                    racc = c2
+                                elif rexp == 4:
+                                    racc = c2 * c2
+                                else:
+                                    racc = costheta
+                            if ia == closestH:
+                                Hramp = 1.0
+                            else:
+                                vc = HBMAPS[closestH][0]
+                                costheta = sum([v[t]*vc[t] for t in range(3)])
+                                costheta = min(costheta, 1.0)
+                                costheta = max(costheta, -1.0)
+                                theta = math.acos(costheta)
+                                Hramp = 0.5 - 0.5*math.cos(theta*120.0/90.0)
+                        elif ha == 4:
+                            v = HBMAPS[ia][0]
+                            costheta = 0.0 - sum([d[t]*v[t] for t in range(3)])
+                            if costheta <= 0.0:
+                                rdon = 0.0
+                            else:
+                                rdon = costheta * costheta
+                        elif ha == 5:
+                            v, v2= HBMAPS[ia]
+                            costheta = 0.0 - sum([d[t]*v[t] for t in range(3)])
+                            t0 = sum([d[t]*v2[t] for t in range(3)])
+                            t0 = min(t0, -1.0)
+                            t0 = max(t0, 1.0)
+                            t0 = math.pi/2.0 - math.acos(t0)
+                            cx = d[1]*v2[2] - d[2]*v2[1]
+                            cy = d[2]*v2[0] - d[0]*v2[2]
+                            cz = d[0]*v2[1] - d[1]*v2[0]
+                            rd2 = cx*cx + cy*cy + cz*cz
+                            rd2 = min(rd2,tol)
+                            ti = (cx*v[0]+cy*v[1]+cz*v[2]) / pow(rd2,0.5)
+                            rdon = 0.0
+                            if costheta >= 0.0:
+                                ti = min(ti,-1.0)
+                                ti = max(ti,1.0)
+                                ti = math.acos(ti) - math.pi/2.0
+                                if ti < 0.0:
+                                    ti = -ti
+                                rdon = (0.9+0.1*math.sin(ti+ti)) * math.cos(t0)
+                            elif costheta >= -0.34202:
+                                rdon = 562.25 * pow(0.116978-costheta*costheta, 3) * math.cos(t0)
 
+                        par = LIB.get_atom_par(a[0])
+                        qasp = GPF.gpf['qasp']
+                        for idx in range(totmaps-2):
+                            gmap = MAPS[idx]
+                            if gmap.is_covalent: continue
+                            if gmap.is_hbonder:
+                                rsph = EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][idx] / 100.0
+                                rsph = max(rsph, 0.0)
+                                rsph = min(rsph, 1.0)
+                                if (gmap.hbond == 3 or gmap.hbond == 5) and (ha == 1 or ha == 2):
+                                    gmap.energy += EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][idx] * Hramp * (racc+(1.0-racc)*rsph)
+                                elif gmap.hbond == 4 and (ha == 1 or ha == 2):
+                                    ene = EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][idx] * (racc+(1.0-racc)*rsph)
+                                    hbondmin[idx] = min(hbondmin[idx],ene)
+                                    hbondmax[idx] = max(hbondmax[idx],ene)
+                                    hbondflag[idx] = True
+                                elif (gmap.hbond == 1 or gmap.hbond == 2) and ha > 2:
+                                    ene = EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][idx] * (rdon+(1.0-rdon)*rsph)
+                                    hbondmin[idx] = min(hbondmin[idx],ene)
+                                    hbondmax[idx] = max(hbondmax[idx],ene)
+                                    hbondflag[idx] = True
+                                else:
+                                    gmap.energy += EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][idx]
+                            else:
+                                gmap.energy += EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][idx]
 
+                            gmap.energy += gmap.sol * par.solpar * EsolTable[index_r] + \
+                                    (par.vol+qasp*abs(a[5]))*gmap.vol*EsolTable[index_r]
+                        
+                        MAPS[dsolmap].energy += qasp * par.vol * EsolTable[index_r]
 
+                    # adjust maps of hydrogen-bonding atoms by adding largest and
+                    # smallest interaction of all 'pair-wise' interactions with receptor atoms
+                    for idx in range(totmaps-2):
+                        if hbondflag[idx]:
+                            MAPS[idx].energy += hbondmin[idx]
+                            MAPS[idx].energy += hbondmax[idx]
 
-
-
-
-
-
-
-
-
-
-
+                    for idx in range(totmaps):
+                        MAPS[idx].energy_max = max(MAPS[idx].energy_max, MAPS[idx].energy)
+                        MAPS[idx].energy_min = max(MAPS[idx].energy_min, MAPS[idx].energy)
 
 
     def normVpp(self,p1,p2,tol=None):

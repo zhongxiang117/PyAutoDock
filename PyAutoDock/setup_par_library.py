@@ -14,7 +14,7 @@ AD_MAP_COEFFS = collections.namedtuple(
 
 AD_MAP_ATOM = collections.namedtuple(
     'AD_MAP_ATOM',(
-        'atomtype Rij epsij vol solpar Rij_hb epsij_hb hbond '  # space is important
+        'atomtype Rij epsij vol sol Rij_hb epsij_hb hbond '  # space is important
         'rec_index map_index bond_index'
     ),
     defaults=[-1.0 for i in range(11)]
@@ -45,8 +45,8 @@ class SetupParLibrary:
         self.filename = filename
         self.atoms = []
         self._read(self.filename)
-        self.atomtypes = {i.atomtype:j for i,j in enumerate(self.atoms)}
-        self.atomtypes_lower = {i.atomtype.lower():j for i,j in enumerate(self.atoms)}
+        self.atomtypes = {j.atomtype:i for i,j in enumerate(self.atoms)}
+        self.atomtypes_lower = {j.atomtype.lower():i for i,j in enumerate(self.atoms)}
 
     def get_atom_vol(self,atomtype,cases=None):
         atom = self.get_atom_par(atomtype,cases)
@@ -56,7 +56,7 @@ class SetupParLibrary:
     def get_atom_sol(self,atomtype,cases=None):
         atom = self.get_atom_par(atomtype,cases)
         if not atom: return 0.0
-        return atom.solpar
+        return atom.sol
 
     def get_atom_hbond(self,atomtype,cases=None):
         atom = self.get_atom_par(atomtype,cases)

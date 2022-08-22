@@ -121,8 +121,12 @@ class SetupMaps:
             logger.critical('not equal: number of entries in: ligand_types & map')
 
         # epsilon distance lookup table
-        # we do not need build the very big table, slightly bigger than box is OK
-        points = (max(GPF.gpf['npts'])+5) * 100
+        # we do not need build the very big table, slightly bigger than molecule box is OK
+        dx = MOL.xmax - MOL.xmin
+        dy = MOL.ymax - MOL.ymin
+        dz = MOL.zmax - MOL.zmin
+        rmax = pow(dx*dx+dy*dy+dz*dz,0.5)
+        points = int(rmax+0.6) * 100
         if GPF.gpf['dielectric'] > 0:
             #TODO factor not known
             logger.info('Using a *constant* dielectric: {:}'.format(GPF.gpf['dielectric']))
@@ -137,7 +141,7 @@ class SetupMaps:
                 for i in range(0,min(310,points),10):
                     print('{:>5.1f} {:>9.2f}'.format(i/100,EPSTable[i]))
             for i in range(len(EPSTable)):
-                EPSTable[i] = 332.06363 / EPSTable[i]
+                EPSTable[i] = 332 / EPSTable[i]     # waiting on further check 332.06363
 
         prec = []
         for a in GPF.gpf['receptor_types']:
@@ -163,7 +167,7 @@ class SetupMaps:
             m = GridMap(num_receptor_maps=len(GPF.gpf['receptor_types']))
             m.atomtype = GPF.gpf['ligand_types'][i]
             par = plig[i]
-            m.sol = par.solpar
+            m.sol = par.sol
             m.vol = par.vol
             m.Rij = par.Rij
             m.epsij = par.epsij
@@ -190,9 +194,12 @@ class SetupMaps:
                     m.nbp_eps[j] = p.epsij_hb
             MAPS.append(m)
         # additional electric and dsolvation
-        for i in range(2):
-            m = GridMap(num_receptor_maps=len(GPF.gpf['receptor_types']))
-            MAPS.append(m)
+        m = GridMap(num_receptor_maps=len(GPF.gpf['receptor_types']))
+        m.atomtype = 'electric'
+        MAPS.append(m)
+        m = GridMap(num_receptor_maps=len(GPF.gpf['receptor_types']))
+        m.atomtype = 'dsolvation'
+        MAPS.append(m)
 
         if logger.level <= 10:
             print()
@@ -299,9 +306,9 @@ class SetupMaps:
                 print()
 
         # setup solvent maps, sigma = 3.6 Angstrom
-        EsolTable = [0.0 for i in range(points)]
+        ESolTable = [0.0 for i in range(points)]
         for t in range(1,points):       # starts from 1
-            EsolTable[t] = LIB.e.FE_coeff_desolv * math.exp(-r*r/10000.0/(2*3.6*3.6))
+            ESolTable[t] = LIB.e.FE_coeff_desolv * math.exp(-r*r/10000.0/(2*3.6*3.6))
 
         #TODO parameter inside GPF
         Disorder_h = False
@@ -309,9 +316,9 @@ class SetupMaps:
         # for hbond maps
         # format:
         #      vector     rexp   normvector
-        #   [(rx,ry,rz), ...                    ]
-        #   [((rx,ry,rz), rexp), ...  ]
-        #   [((rx,ry,rz), (nx,ny,nz)), ...      ]
+        #   [(rx,ry,rz), ... ]                  # for ha == 4 or `left`
+        #   [((rx,ry,rz), rexp), ... ]          # for ha == 2
+        #   [((rx,ry,rz), (nx,ny,nz)), ... ]    # for ha == 5
         #
         # important:
         #   a) values are in different formats
@@ -478,6 +485,7 @@ class SetupMaps:
                 else:
                     logger.critical('ha=5: How can it be??')
             else:
+                # important to append an empty tuple
                 HBMAPS.append((0.0,0.0,0.0))
 
         totmaps = len(GPF.gpf['ligand_types'])+2
@@ -488,15 +496,17 @@ class SetupMaps:
             )
         )
 
+        tmpnum = 1
+
         elecmap = totmaps - 2
         dsolmap = totmaps - 3
         estat = LIB.e.FE_coeff_estat
         hnpts = [t//2 for t in GPF.gpf['npts']]
-        for iz in range(-hnpts[2], hnpts[2]):
+        for iz in range(-hnpts[2], hnpts[2]+1):
             c = [0.0, 0.0, iz * GPF.gpf['spacing']]
-            for iy in range(-hnpts[1], hnpts[1]):
+            for iy in range(-hnpts[1], hnpts[1]+1):
                 c[1] = iy * GPF.gpf['spacing']
-                for ix in range(-hnpts[0],hnpts[0]):
+                for ix in range(-hnpts[0],hnpts[0]+1):
                     c[0] = ix * GPF.gpf['spacing']
 
                     hbondmin = [999999.0 for t in range(totmaps-2)]
@@ -517,6 +527,8 @@ class SetupMaps:
                     d = [MOL.atoms[closestH][t+2]-c[t] for t in range(3)]
                     rmin = pow(sum([t*t for t in d]), 0.5)
 
+                    print('>>closestH=',closestH,'     rmin=',rmin)
+
                     for ia,a in enumerate(MOL.atoms):
                         d = [a[t+2]-c[t] for t in range(3)]
                         vv = max(sum([t*t for t in d]),tol)
@@ -524,17 +536,23 @@ class SetupMaps:
                         d = [t/r for t in d]
                         inv_rmax = 1.0 / max(r,0.5)
 
-                        index_r = min(int(r*100+0.6), 16383)       #TODO
-                        index_n = min(int(r*100+0.6), 131071)
+                        index_r = min(int(r*100), 16383)       #TODO
+                        index_n = min(int(r*100), 131071)
+
+                        #print('d=',d,  '   inv_rmax=', inv_rmax, '   index_r=',index_r, '   index_n=',index_n)
 
                         if GPF.gpf['dielectric'] > 0:
                             #TODO test
                             MAPS[elecmap].energy += a[5] * inv_rmax * 1.0/40 * estat
                         else:
                             MAPS[elecmap].energy += a[5] * inv_rmax * EPSTable[index_r] * estat
+                        
+                        #print('energy=',MAPS[elecmap].energy,' charge=',a[5])
+
+                        #if ia > 36: return
 
                         # NBC
-                        if r > 64: continue
+                        if r > 8: continue
 
                         if Disorder_h and a[0].upper() == 'HD': continue
 
@@ -545,6 +563,9 @@ class SetupMaps:
                         if ha == 2:
                             v,rexp = HBMAPS[ia]
                             costheta = 0.0 - sum([d[t]*v[t] for t in range(3)])
+                            if ia==1206 or ia==1716 or ia==1692 or ia==1682 or ia==1672:
+                                print('ia=',ia, '   closestH=',closestH, '   costheta=',costheta,'   v=',v)
+                                print('d=',d, '   rexp=',rexp)
                             if costheta <= 0:
                                 racc = 0.0
                             else:
@@ -560,12 +581,16 @@ class SetupMaps:
                             else:
                                 vc = HBMAPS[closestH][0]
                                 costheta = sum([v[t]*vc[t] for t in range(3)])
-                                costheta = min(costheta, 1.0)
-                                costheta = max(costheta, -1.0)
+                                if costheta > 1.0:
+                                    costheta = 1.0
+                                elif costheta < -1.0:
+                                    costheta = -1.0
                                 theta = math.acos(costheta)
                                 Hramp = 0.5 - 0.5*math.cos(theta*120.0/90.0)
+                            if ia==1206 or ia==1716 or ia==1692 or ia==1682 or ia==1672:
+                                print('costheta=',costheta,'   vc=',vc)
                         elif ha == 4:
-                            v = HBMAPS[ia][0]
+                            v = HBMAPS[ia]
                             costheta = 0.0 - sum([d[t]*v[t] for t in range(3)])
                             if costheta <= 0.0:
                                 rdon = 0.0
@@ -575,28 +600,41 @@ class SetupMaps:
                             v, v2= HBMAPS[ia]
                             costheta = 0.0 - sum([d[t]*v[t] for t in range(3)])
                             t0 = sum([d[t]*v2[t] for t in range(3)])
-                            t0 = min(t0, -1.0)
-                            t0 = max(t0, 1.0)
+                            if t0 > 1.0:
+                                t0 = 1.0
+                            elif t0 < -1.0:
+                                t0 = -1.0
                             t0 = math.pi/2.0 - math.acos(t0)
                             cx = d[1]*v2[2] - d[2]*v2[1]
                             cy = d[2]*v2[0] - d[0]*v2[2]
                             cz = d[0]*v2[1] - d[1]*v2[0]
                             rd2 = cx*cx + cy*cy + cz*cz
-                            rd2 = min(rd2,tol)
+                            rd2 = max(rd2,tol)
                             ti = (cx*v[0]+cy*v[1]+cz*v[2]) / pow(rd2,0.5)
                             rdon = 0.0
                             if costheta >= 0.0:
-                                ti = min(ti,-1.0)
-                                ti = max(ti,1.0)
+                                if ti > 1.0:
+                                    ti = 1.0
+                                elif ti < -1.0:
+                                    ti = -1.0
                                 ti = math.acos(ti) - math.pi/2.0
                                 if ti < 0.0:
                                     ti = -ti
                                 rdon = (0.9+0.1*math.sin(ti+ti)) * math.cos(t0)
                             elif costheta >= -0.34202:
                                 rdon = 562.25 * pow(0.116978-costheta*costheta, 3) * math.cos(t0)
+                        
+                        print('ia=',ia,'   ha=',ha,'  atype=',MOLATOMSINDEX[ia],'  racc=',racc,'  rdon=',rdon,'  Hramp=',Hramp)
 
                         par = LIB.get_atom_par(a[0])
                         qasp = GPF.gpf['qasp']
+
+                        print('solpar_q=',qasp,'  vol=',par.vol, '  sol=',par.sol)
+                        print()
+
+                        if tmpnum > 100: return
+                        tmpnum += 1
+
                         for idx in range(totmaps-2):
                             gmap = MAPS[idx]
                             if gmap.is_covalent: continue
@@ -621,10 +659,10 @@ class SetupMaps:
                             else:
                                 gmap.energy += EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][idx]
 
-                            gmap.energy += gmap.sol * par.solpar * EsolTable[index_r] + \
-                                    (par.vol+qasp*abs(a[5]))*gmap.vol*EsolTable[index_r]
+                            gmap.energy += gmap.sol * par.vol * ESolTable[index_r] + \
+                                    (par.sol+qasp*abs(a[5]))*gmap.vol*ESolTable[index_r]
                         
-                        MAPS[dsolmap].energy += qasp * par.vol * EsolTable[index_r]
+                        MAPS[dsolmap].energy += qasp * par.vol * ESolTable[index_r]
 
                     # adjust maps of hydrogen-bonding atoms by adding largest and
                     # smallest interaction of all 'pair-wise' interactions with receptor atoms
@@ -636,6 +674,14 @@ class SetupMaps:
                     for idx in range(totmaps):
                         MAPS[idx].energy_max = max(MAPS[idx].energy_max, MAPS[idx].energy)
                         MAPS[idx].energy_min = max(MAPS[idx].energy_min, MAPS[idx].energy)
+                
+                for m in MAPS:
+                    print('    atomtype=',m.atomtype, '   energy=',m.energy,end='')
+                print()
+            return
+    
+        for m in MAPS:
+            print('type=',m.atomtype, '   energy_min=',m.energy_min,  '    energy_max',m.energy_max)
 
 
     def normVpp(self,p1,p2,tol=None):

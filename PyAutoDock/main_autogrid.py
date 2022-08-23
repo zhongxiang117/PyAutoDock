@@ -387,17 +387,17 @@ class SetupMaps:
                     logger.warning(f'Nitrogen atom found with no bonded atoms, atom serial number: {ia+1}')
                 elif nbond == 1:    # one bond: Azide Nitrogen :N=C-X
                     v = self.normVpp(MOL.atoms[j1][2:5], a[2:5])
-                    print('ha=4 nbond=1 ia=',ia,'j1=',j1,'v=',v)
+                    #print('ha=4 nbond=1 ia=',ia,'j1=',j1,'v=',v)
                 elif nbond == 2:    # two bonds: X1-N=X2
                     #TODO test
                     tmpv = [(MOL.atoms[j1][t]+MOL.atoms[j2][t])/2.0 for t in range(2,5)]
                     v = self.normVpp(tmpv, a[2:5])
-                    print('ha=4 nbond=2 ia=',ia,'j1=',j1,'v=',v)
+                    #print('ha=4 nbond=2 ia=',ia,'j1=',j1,'v=',v)
                 elif nbond == 3:    # three bonds: X1,X2,X3
                     #TODO test
                     tmpv = [(MOL.atoms[j1][t]+MOL.atoms[j2][t]+MOL.atoms[j3][t])/3.0 for t in range(2,5)]
                     v = self.normVpp(tmpv, a[2:5])
-                    print('ha=4 nbond=3 ia=',ia,'j1=',j1,'v=',v)
+                    #print('ha=4 nbond=3 ia=',ia,'j1=',j1,'v=',v)
                 else:
                     logger.critical('ha=4: How can it be??')
                 HBMAPS.append(tuple(v))
@@ -527,7 +527,7 @@ class SetupMaps:
                     d = [MOL.atoms[closestH][t+2]-c[t] for t in range(3)]
                     rmin = pow(sum([t*t for t in d]), 0.5)
 
-                    print('>>closestH=',closestH,'     rmin=',rmin)
+                    #print('>>closestH=',closestH,'     rmin=',rmin)
 
                     for ia,a in enumerate(MOL.atoms):
                         d = [a[t+2]-c[t] for t in range(3)]
@@ -563,9 +563,9 @@ class SetupMaps:
                         if ha == 2:
                             v,rexp = HBMAPS[ia]
                             costheta = 0.0 - sum([d[t]*v[t] for t in range(3)])
-                            if ia==1206 or ia==1716 or ia==1692 or ia==1682 or ia==1672:
-                                print('ia=',ia, '   closestH=',closestH, '   costheta=',costheta,'   v=',v)
-                                print('d=',d, '   rexp=',rexp)
+                            #if ia==1206 or ia==1716 or ia==1692 or ia==1682 or ia==1672:
+                            #    print('ia=',ia, '   closestH=',closestH, '   costheta=',costheta,'   v=',v)
+                            #    print('d=',d, '   rexp=',rexp)
                             if costheta <= 0:
                                 racc = 0.0
                             else:
@@ -576,19 +576,19 @@ class SetupMaps:
                                     racc = c2 * c2
                                 else:
                                     racc = costheta
-                            if ia == closestH:
-                                Hramp = 1.0
-                            else:
-                                vc = HBMAPS[closestH][0]
-                                costheta = sum([v[t]*vc[t] for t in range(3)])
-                                if costheta > 1.0:
-                                    costheta = 1.0
-                                elif costheta < -1.0:
-                                    costheta = -1.0
-                                theta = math.acos(costheta)
-                                Hramp = 0.5 - 0.5*math.cos(theta*120.0/90.0)
-                            if ia==1206 or ia==1716 or ia==1692 or ia==1682 or ia==1672:
-                                print('costheta=',costheta,'   vc=',vc)
+                                if ia == closestH:
+                                    Hramp = 1.0
+                                else:
+                                    vc = HBMAPS[closestH][0]
+                                    costheta = sum([v[t]*vc[t] for t in range(3)])
+                                    if costheta > 1.0:
+                                        costheta = 1.0
+                                    elif costheta < -1.0:
+                                        costheta = -1.0
+                                    theta = math.acos(costheta)
+                                    Hramp = 0.5 - 0.5*math.cos(theta*120.0/90.0)
+                            #if ia==1206 or ia==1716 or ia==1692 or ia==1682 or ia==1672:
+                            #    print('costheta=',costheta,'   vc=',vc)
                         elif ha == 4:
                             v = HBMAPS[ia]
                             costheta = 0.0 - sum([d[t]*v[t] for t in range(3)])
@@ -624,24 +624,26 @@ class SetupMaps:
                             elif costheta >= -0.34202:
                                 rdon = 562.25 * pow(0.116978-costheta*costheta, 3) * math.cos(t0)
                         
-                        print('ia=',ia,'   ha=',ha,'  atype=',MOLATOMSINDEX[ia],'  racc=',racc,'  rdon=',rdon,'  Hramp=',Hramp)
+                        #print('ia=',ia,'   ha=',ha,'  atype=',MOLATOMSINDEX[ia],'  racc=',racc,'  rdon=',rdon,'  Hramp=',Hramp)
 
                         par = LIB.get_atom_par(a[0])
                         qasp = GPF.gpf['qasp']
 
-                        print('solpar_q=',qasp,'  vol=',par.vol, '  sol=',par.sol)
-                        print()
+                        #print('solpar_q=',qasp,'  vol=',par.vol, '  sol=',par.sol)
+                        #print()
 
-                        if tmpnum > 100: return
-                        tmpnum += 1
+                        #if tmpnum > 100: return
+                        #tmpnum += 1
 
                         for idx in range(totmaps-2):
                             gmap = MAPS[idx]
                             if gmap.is_covalent: continue
                             if gmap.is_hbonder:
                                 rsph = EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][idx] / 100.0
-                                rsph = max(rsph, 0.0)
-                                rsph = min(rsph, 1.0)
+                                if rsph < 0.0:
+                                    rsph = 0.0
+                                elif rsph > 1.0:
+                                    rsph = 1.0
                                 if (gmap.hbond == 3 or gmap.hbond == 5) and (ha == 1 or ha == 2):
                                     gmap.energy += EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][idx] * Hramp * (racc+(1.0-racc)*rsph)
                                 elif gmap.hbond == 4 and (ha == 1 or ha == 2):
@@ -675,9 +677,9 @@ class SetupMaps:
                         MAPS[idx].energy_max = max(MAPS[idx].energy_max, MAPS[idx].energy)
                         MAPS[idx].energy_min = max(MAPS[idx].energy_min, MAPS[idx].energy)
                 
-                for m in MAPS:
-                    print('    atomtype=',m.atomtype, '   energy=',m.energy,end='')
-                print()
+                    m = MAPS[0]
+                    print('    atomtype=',m.atomtype, '   energy=',m.energy)
+
             return
     
         for m in MAPS:

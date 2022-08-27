@@ -7,6 +7,7 @@ from PyAutoDock.utils import file_gen_new, calc_ddd_Mehler_Solmajer
 import os
 import sys
 import math
+import pdb
 
 logger = mylogger()
 logger.setLevel(10)
@@ -246,11 +247,11 @@ class SetupMaps:
                     EvdWHBondTable[k][j][i] = min(EINTCLAMP,m.cA[j]/rA-m.cB[j]/rB)
                 EvdWHBondTable[0][j][i] = EINTCLAMP
                 EvdWHBondTable[points-1][j][i] = 0.0
-
+            
             # smooth
             n = int(GPF.gpf['smooth'] * 100.0 / 2.0 + 0.6)
 
-            if False and logger.level <= 10 and n > 0:
+            if logger.level <= 10 and n > 0:
                 tmp = 'Before Smooth: ' if n > 0 else ''
                 print('\n{:}Pairwise interactions:'.format(tmp))
                 out = '>> {:>3}-'.format(GPF.gpf['ligand_types'][i])
@@ -272,17 +273,20 @@ class SetupMaps:
                         out += '{:9.2f} '.format(EvdWHBondTable[t][j][i])
                     print(out)
                 print()
+            
 
             if n > 0:
+                # do smooth
                 etmp = [0.0 for t in range(points)]
                 for j in range(len(GPF.gpf['receptor_types'])):
                     for k in range(points):
                         etmp[k] = EINTCLAMP
                         for s in range(max(0,k-n), min(points,k+n+1)):
                             etmp[k] = min(etmp[k], EvdWHBondTable[s][j][i])
+                    for k in range(points):
                         EvdWHBondTable[k][j][i] = etmp[k]
 
-            if False and logger.level <= 10 and n > 0:
+            if logger.level <= 10 and n > 0:
                 tmp = 'After Smooth: ' if n > 0 else ''
                 print('\n\n{:}Pairwise interactions:'.format(tmp))
                 out = '>> {:>3}-'.format(GPF.gpf['ligand_types'][i])
@@ -304,11 +308,15 @@ class SetupMaps:
                         out += '{:9.2f} '.format(EvdWHBondTable[t][j][i])
                     print(out)
                 print()
+        
+        #for t in range(1000):
+        #    print('EvdWHBondTable[',t,'][2][0]=',EvdWHBondTable[t][2][0])
+        #exit()
 
         # setup solvent maps, sigma = 3.6 Angstrom
         ESolTable = [0.0 for i in range(points)]
         for t in range(1,points):       # starts from 1
-            ESolTable[t] = LIB.e.FE_coeff_desolv * math.exp(-r*r/10000.0/(2*3.6*3.6))
+            ESolTable[t] = LIB.e.FE_coeff_desolv * math.exp(-t*t/10000.0/(2*3.6*3.6))
 
         #TODO parameter inside GPF
         Disorder_h = False
@@ -527,7 +535,8 @@ class SetupMaps:
                     d = [MOL.atoms[closestH][t+2]-c[t] for t in range(3)]
                     rmin = pow(sum([t*t for t in d]), 0.5)
 
-                    #print('>>closestH=',closestH,'     rmin=',rmin)
+                    pdb.set_trace()
+                    print('>>closestH=',closestH,'     rmin=',rmin)
 
                     for ia,a in enumerate(MOL.atoms):
                         d = [a[t+2]-c[t] for t in range(3)]
@@ -536,10 +545,10 @@ class SetupMaps:
                         d = [t/r for t in d]
                         inv_rmax = 1.0 / max(r,0.5)
 
-                        index_r = min(int(r*100), 16383)       #TODO
-                        index_n = min(int(r*100), 131071)
+                        index_r = min(int(r*100), 16383)        #TODO, NDIEL
+                        index_n = min(int(r*100), 2047)         #NEINT
 
-                        #print('d=',d,  '   inv_rmax=', inv_rmax, '   index_r=',index_r, '   index_n=',index_n)
+                        print('d=',d,  '   inv_rmax=', inv_rmax, '   index_r=',index_r, '   index_n=',index_n)
 
                         if GPF.gpf['dielectric'] > 0:
                             #TODO test
@@ -547,7 +556,7 @@ class SetupMaps:
                         else:
                             MAPS[elecmap].energy += a[5] * inv_rmax * EPSTable[index_r] * estat
                         
-                        #print('energy=',MAPS[elecmap].energy,' charge=',a[5])
+                        print('energy=',MAPS[elecmap].energy,' charge=',a[5])
 
                         #if ia > 36: return
 
@@ -555,6 +564,8 @@ class SetupMaps:
                         if r > 8: continue
 
                         if Disorder_h and a[0].upper() == 'HD': continue
+
+                        print('d=',d,  '   inv_rmax=', inv_rmax, '   index_r=',index_r, '   index_n=',index_n)
 
                         ha = HBONDTYPES[ia]
                         racc = 1.0
@@ -597,7 +608,7 @@ class SetupMaps:
                             else:
                                 rdon = costheta * costheta
                         elif ha == 5:
-                            v, v2= HBMAPS[ia]
+                            v, v2 = HBMAPS[ia]
                             costheta = 0.0 - sum([d[t]*v[t] for t in range(3)])
                             t0 = sum([d[t]*v2[t] for t in range(3)])
                             if t0 > 1.0:
@@ -623,14 +634,15 @@ class SetupMaps:
                                 rdon = (0.9+0.1*math.sin(ti+ti)) * math.cos(t0)
                             elif costheta >= -0.34202:
                                 rdon = 562.25 * pow(0.116978-costheta*costheta, 3) * math.cos(t0)
-                        
-                        #print('ia=',ia,'   ha=',ha,'  atype=',MOLATOMSINDEX[ia],'  racc=',racc,'  rdon=',rdon,'  Hramp=',Hramp)
 
                         par = LIB.get_atom_par(a[0])
                         qasp = GPF.gpf['qasp']
-
-                        #print('solpar_q=',qasp,'  vol=',par.vol, '  sol=',par.sol)
-                        #print()
+                        
+                        print('ia=',ia,'   ha=',ha,'  atype=',MOLATOMSINDEX[ia],'  racc=',racc,'  rdon=',rdon,'  Hramp=',Hramp)
+                        print('solpar_q=',qasp,'  vol=',par.vol, '  sol=',par.sol)
+                        print('EvdWHBONDTable=',EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][0],'   solfn=',ESolTable[index_r])
+                        print()
+                        pdb.set_trace()
 
                         #if tmpnum > 100: return
                         #tmpnum += 1

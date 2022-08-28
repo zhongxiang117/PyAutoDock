@@ -4,20 +4,17 @@ from PyAutoDock.read_pdbqt import ReadPDBQT
 from PyAutoDock.setup_par_library import SetupParLibrary
 from PyAutoDock.utils import file_gen_new, calc_ddd_Mehler_Solmajer
 
-import os
-import sys
 import math
-import pdb
 
 logger = mylogger()
-logger.setLevel(10)
+if logger.level == 0: logger.level = 20     # NOTSET
+
 
 class GridMap:
     def __init__(self,num_receptor_maps=None,*args,**kwargs):
         self.num_receptor_maps = num_receptor_maps if num_receptor_maps else 0
         self.atomtype = None
         self.is_covalent = None
-        self.is_hbonder = None
         self.energy_max = 0.0
         self.energy_min = 0.0
         self.energy = 0.0
@@ -77,7 +74,7 @@ class SetupMaps:
         #TODO guessing
         if not GPF.gpf['ligand_types']:
             logger.critical('required: gpf({:}): ligand_types'.format(self.ligand_gpf_filename))
-        
+
         if GPF.gpf['npts']:
             num_grids = 1
             for i in GPF.gpf['npts']: num_grids = num_grids * (i+1)
@@ -92,7 +89,7 @@ class SetupMaps:
             GPF.gpf['npts'] = [xn, yn, zn]
             num_grids = (xn+1) * (yn+1) * (zn+1)
         logger.info('number of total grids: {:}'.format(num_grids))
-        
+
         if GPF.gpf['gridcenter']:
             # based on new gridcenter, recalculate box coordinates
             MOL.translate(*GPF.gpf['gridcenter'])
@@ -159,7 +156,7 @@ class SetupMaps:
                 plig.append(par)
             else:
                 logger.critical('not defined: ligand_types: {:}'.format(a))
-        
+
         # calculate receptor atoms distance map
         #TODO awaits negotiation, takes too much memory
 
@@ -175,8 +172,6 @@ class SetupMaps:
             m.hbond = par.hbond
             m.Rij_hb = par.Rij_hb
             m.epsij_hb = par.epsij_hb
-            if m.hbond > 0:
-                m.is_hbonder = True
             for j in range(len(GPF.gpf['receptor_types'])):
                 p = prec[j]
                 m.nbp_r[j] = (m.Rij + p.Rij) / 2.0
@@ -208,9 +203,9 @@ class SetupMaps:
                 m = MAPS[i]
                 print('\nFor ligand type: {:}'.format(a))
                 print(
-                    'is_hbonder={:}, hbond={:}, sol={:.8f}, vol={:.6f}, Rij={:.3f}, '
+                    'hbond={:}, sol={:.8f}, vol={:.6f}, Rij={:.3f}, '
                     'epsij={:.4f}, Rij_hb={:.4f}, epsij_hb={:.4f}'.format(
-                        m.is_hbonder, m.hbond, m.sol, m.vol, m.Rij, m.epsij,
+                        m.hbond, m.sol, m.vol, m.Rij, m.epsij,
                         m.Rij_hb, m.epsij_hb
                     )
                 )
@@ -230,7 +225,7 @@ class SetupMaps:
             ]
             for k in range(points)
         ]
-        for i in range(len(GPF.gpf['ligand_types'])):
+        for i in range(len(GPF.gpf['ligand_types'])):       # index i is super important, be careful
             if MAPS[i].is_covalent:
                 logger.info('For covalent map: any internal non-bonded parameters will be ignored')
                 logger.info('covalent map: ligand_type={:}'.format(GPF.gpf['ligand_types'][i]))
@@ -247,7 +242,7 @@ class SetupMaps:
                     EvdWHBondTable[k][j][i] = min(EINTCLAMP,m.cA[j]/rA-m.cB[j]/rB)
                 EvdWHBondTable[0][j][i] = EINTCLAMP
                 EvdWHBondTable[points-1][j][i] = 0.0
-            
+
             # smooth
             n = int(GPF.gpf['smooth'] * 100.0 / 2.0 + 0.6)
 
@@ -273,7 +268,6 @@ class SetupMaps:
                         out += '{:9.2f} '.format(EvdWHBondTable[t][j][i])
                     print(out)
                 print()
-            
 
             if n > 0:
                 # do smooth
@@ -308,10 +302,6 @@ class SetupMaps:
                         out += '{:9.2f} '.format(EvdWHBondTable[t][j][i])
                     print(out)
                 print()
-        
-        #for t in range(1000):
-        #    print('EvdWHBondTable[',t,'][2][0]=',EvdWHBondTable[t][2][0])
-        #exit()
 
         # setup solvent maps, sigma = 3.6 Angstrom
         ESolTable = [0.0 for i in range(points)]
@@ -353,7 +343,6 @@ class SetupMaps:
                         dinv = 1.0 / pow(dd,0.5)
                         v = tuple([t*dinv for t in v])
                         HBMAPS.append((v,rexp))
-                        #print('ia=',ia,'jb=',jb,'v=',v,'rexp=',rexp)
                         # Question: only find one of them??
                         break
                 if not boset:
@@ -369,7 +358,6 @@ class SetupMaps:
                 bto = min(ia+20, len(MOL.atoms)-1)
                 for jb in range(bfrom,bto):
                     b = MOL.atoms[jb]
-                #for jb,b in enumerate(MOL.atoms):
                     if ia == jb: continue
                     v = [a[t]-b[t] for t in range(2,5)]
                     dd = sum([t*t for t in v])
@@ -395,17 +383,14 @@ class SetupMaps:
                     logger.warning(f'Nitrogen atom found with no bonded atoms, atom serial number: {ia+1}')
                 elif nbond == 1:    # one bond: Azide Nitrogen :N=C-X
                     v = self.normVpp(MOL.atoms[j1][2:5], a[2:5])
-                    #print('ha=4 nbond=1 ia=',ia,'j1=',j1,'v=',v)
                 elif nbond == 2:    # two bonds: X1-N=X2
                     #TODO test
                     tmpv = [(MOL.atoms[j1][t]+MOL.atoms[j2][t])/2.0 for t in range(2,5)]
                     v = self.normVpp(tmpv, a[2:5])
-                    #print('ha=4 nbond=2 ia=',ia,'j1=',j1,'v=',v)
                 elif nbond == 3:    # three bonds: X1,X2,X3
                     #TODO test
                     tmpv = [(MOL.atoms[j1][t]+MOL.atoms[j2][t]+MOL.atoms[j3][t])/3.0 for t in range(2,5)]
                     v = self.normVpp(tmpv, a[2:5])
-                    #print('ha=4 nbond=3 ia=',ia,'j1=',j1,'v=',v)
                 else:
                     logger.critical('ha=4: How can it be??')
                 HBMAPS.append(tuple(v))
@@ -447,7 +432,7 @@ class SetupMaps:
                         dd2 = max(sum([t*t for t in vd]), tol)
                         btype = c[0].upper()
                         if (dd2 < 2.89 and btype != 'HD') or (dd2 < 1.69 and btype == 'HD'):
-                            d2inv = 1.0 / pow(dd2,0.5) 
+                            d2inv = 1.0 / pow(dd2,0.5)
                             vd = [t*d2inv for t in vd]
                             # C=O cross C-X to get long pair plane norm vector
                             x = v1[1]*vd[2] - v1[2]*vd[1]
@@ -455,11 +440,11 @@ class SetupMaps:
                             z = v1[0]*vd[1] - v1[1]*vd[0]
                             d = pow(max(x*x+y*y+z*z, tol), 0.5)
                             v2 = (x/d, y/d, z/d)
+                            #TODO why not break?
                             #break
                     if not v2:
                         logger.warning(f'Oxygen atom found only one bonded atom, atom serial number: {ia+1}')
                         v2 = (0.0, 0.0, 0.0)
-                    #print('ha=5 nbond=',nbond,'v1=',v1,'v2=',v2,'ia=',ia,'j1=',j1,'j2=',j2)
                     HBMAPS.append((v1,v2))
                 elif nbond == 2:
                     btype1 = MOL.atoms[j1][0].upper()
@@ -482,14 +467,13 @@ class SetupMaps:
                         dd2 = max(sum([t*t for t in v2]), tol)
                         d2inv = 1.0 / pow(dd2,0.5)
                         v2 = tuple([t*d2inv for t in v2])
-                        
+
                         dot = sum([(a[t+2]-MOL.atoms[j1][t+2])*v2[t] for t in range(3)])
                         v1 = [a[t+2] - (dot*v2[t]+MOL.atoms[j1][t+2]) for t in range(3)]
                         dd1 = max(sum([t*t for t in v1]), tol)
                         d1inv = 1.0 / pow(dd1,0.5)
                         v1 = tuple([t*d1inv for t in v1])
                         HBMAPS.append((v1,v2))
-                    #print('ha=5 nbond=',nbond,'v1=',v1,'v2=',v2,'ia=',ia,'j1=',j1,'j2=',j2)
                 else:
                     logger.critical('ha=5: How can it be??')
             else:
@@ -504,18 +488,29 @@ class SetupMaps:
             )
         )
 
-        tmpnum = 1
-
         elecmap = totmaps - 1
         dsolmap = totmaps - 2
         estat = LIB.e.FE_coeff_estat
         hnpts = [t//2 for t in GPF.gpf['npts']]
+        # format: [ x(y(z(num_maps(energy)))), ... ]
+        EnergyMaps = [
+            [
+                [ [0.0 for t in range(totmaps)] for k in range(2*hnpts[2]+1) ]
+                for j in range(2*hnpts[1]+1)
+            ]
+            for i in range(2*hnpts[0]+1)
+        ]
         for iz in range(-hnpts[2], hnpts[2]+1):
             c = [0.0, 0.0, iz * GPF.gpf['spacing']]
+            zndx = iz + hnpts[2]
             for iy in range(-hnpts[1], hnpts[1]+1):
                 c[1] = iy * GPF.gpf['spacing']
+                yndx = iy + hnpts[1]
                 for ix in range(-hnpts[0],hnpts[0]+1):
                     c[0] = ix * GPF.gpf['spacing']
+                    xndx = ix + hnpts[0]
+
+                    Emap = EnergyMaps[xndx][yndx][zndx]
 
                     hbondmin = [999999.0 for t in range(totmaps-2)]
                     hbondmax = [-999999.0 for t in range(totmaps-2)]
@@ -533,11 +528,6 @@ class SetupMaps:
                                 rmin = vv
                                 closestH = i
                     d = [MOL.atoms[closestH][t+2]-c[t] for t in range(3)]
-                    rmin = pow(sum([t*t for t in d]), 0.5)
-
-                    pdb.set_trace()
-                    print('>>closestH=',closestH,'     rmin=',rmin)
-                    for t in MAPS: t.energy = 0.0
 
                     for ia,a in enumerate(MOL.atoms):
                         d = [a[t+2]-c[t] for t in range(3)]
@@ -549,24 +539,16 @@ class SetupMaps:
                         index_r = min(int(r*100), 16383)        #TODO, NDIEL
                         index_n = min(int(r*100), 2047)         #NEINT
 
-                        #print('d=',d,  '   inv_rmax=', inv_rmax, '   index_r=',index_r, '   index_n=',index_n)
-
                         if GPF.gpf['dielectric'] > 0:
                             #TODO test
-                            MAPS[elecmap].energy += a[5] * inv_rmax * 1.0/40 * estat
+                            Emap[elecmap] += a[5] * inv_rmax * 1.0/40 * estat
                         else:
-                            MAPS[elecmap].energy += a[5] * inv_rmax * EPSTable[index_r] * estat
-                        
-                        #print('energy=',MAPS[elecmap].energy,' charge=',a[5])
-
-                        #if ia > 36: return
+                            Emap[elecmap] += a[5] * inv_rmax * EPSTable[index_r] * estat
 
                         # NBC
                         if r > 8: continue
 
                         if Disorder_h and a[0].upper() == 'HD': continue
-
-                        #print('d=',d,  '   inv_rmax=', inv_rmax, '   index_r=',index_r, '   index_n=',index_n)
 
                         ha = HBONDTYPES[ia]
                         racc = 1.0
@@ -575,9 +557,6 @@ class SetupMaps:
                         if ha == 2:
                             v,rexp = HBMAPS[ia]
                             costheta = 0.0 - sum([d[t]*v[t] for t in range(3)])
-                            #if ia==1206 or ia==1716 or ia==1692 or ia==1682 or ia==1672:
-                            #    print('ia=',ia, '   closestH=',closestH, '   costheta=',costheta,'   v=',v)
-                            #    print('d=',d, '   rexp=',rexp)
                             if costheta <= 0:
                                 racc = 0.0
                             else:
@@ -599,8 +578,6 @@ class SetupMaps:
                                         costheta = -1.0
                                     theta = math.acos(costheta)
                                     Hramp = 0.5 - 0.5*math.cos(theta*120.0/90.0)
-                            #if ia==1206 or ia==1716 or ia==1692 or ia==1682 or ia==1672:
-                            #    print('costheta=',costheta,'   vc=',vc)
                         elif ha == 4:
                             v = HBMAPS[ia]
                             costheta = 0.0 - sum([d[t]*v[t] for t in range(3)])
@@ -638,30 +615,18 @@ class SetupMaps:
 
                         par = LIB.get_atom_par(a[0])
                         qasp = GPF.gpf['qasp']
-                        
-                        #print('ia=',ia,'   ha=',ha,'  atype=',MOLATOMSINDEX[ia],'  racc=',racc,'  rdon=',rdon,'  Hramp=',Hramp)
-                        #print('solpar_q=',qasp,'  vol=',par.vol, '  sol=',par.sol)
-                        #print('EvdWHBONDTable=',EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][0],'   solfn=',ESolTable[index_r])
-                        #print()
-                        #pdb.set_trace()
-
-                        #if tmpnum > 100: return
-                        #tmpnum += 1
-
                         for idx in range(totmaps-2):
                             gmap = MAPS[idx]
                             if gmap.is_covalent: continue
                             atype = MOLATOMSINDEX[ia]
-                            #print('genergy=',gmap.energy, end='     ')
-                            if gmap.is_hbonder:
+                            if gmap.hbond > 0:
                                 rsph = EvdWHBondTable[index_n][atype][idx] / 100.0
                                 if rsph < 0.0:
                                     rsph = 0.0
                                 elif rsph > 1.0:
                                     rsph = 1.0
-                                #print('rsph=',rsph, end='    ')
                                 if (gmap.hbond == 3 or gmap.hbond == 5) and (ha == 1 or ha == 2):
-                                    gmap.energy += EvdWHBondTable[index_n][atype][idx] * Hramp * (racc+(1.0-racc)*rsph)
+                                    Emap[idx] += EvdWHBondTable[index_n][atype][idx] * Hramp * (racc+(1.0-racc)*rsph)
                                 elif gmap.hbond == 4 and (ha == 1 or ha == 2):
                                     ene = EvdWHBondTable[index_n][atype][idx] * (racc+(1.0-racc)*rsph)
                                     hbondmin[idx] = min(hbondmin[idx],ene)
@@ -673,37 +638,26 @@ class SetupMaps:
                                     hbondmax[idx] = max(hbondmax[idx],ene)
                                     hbondflag[idx] = True
                                 else:
-                                    gmap.energy += EvdWHBondTable[index_n][atype][idx]
+                                    Emap[idx] += EvdWHBondTable[index_n][atype][idx]
                             else:
-                                gmap.energy += EvdWHBondTable[index_n][atype][idx]
+                                Emap[idx] += EvdWHBondTable[index_n][atype][idx]
 
-                            gmap.energy += gmap.sol * par.vol * ESolTable[index_r] + \
+                            Emap[idx] += gmap.sol * par.vol * ESolTable[index_r] + \
                                     (par.sol+qasp*abs(a[5]))*gmap.vol*ESolTable[index_r]
-                            
-                            #print('genergy=',gmap.energy, )
-                        
+
                         # exclusively for dsolvation
-                        MAPS[dsolmap].energy += qasp * par.vol * ESolTable[index_r]
+                        Emap[dsolmap] += qasp * par.vol * ESolTable[index_r]
 
                     # adjust maps of hydrogen-bonding atoms by adding largest and
                     # smallest interaction of all 'pair-wise' interactions with receptor atoms
                     for idx in range(totmaps-2):
                         if hbondflag[idx]:
-                            MAPS[idx].energy += hbondmin[idx]
-                            MAPS[idx].energy += hbondmax[idx]
+                            Emap[idx] += hbondmin[idx]
+                            Emap[idx] += hbondmax[idx]
 
                     for idx in range(totmaps):
                         MAPS[idx].energy_max = max(MAPS[idx].energy_max, MAPS[idx].energy)
                         MAPS[idx].energy_min = max(MAPS[idx].energy_min, MAPS[idx].energy)
-                
-                    m = MAPS[0]
-                    print('    atomtype=',m.atomtype, '   energy=',m.energy)
-
-            return
-    
-        for m in MAPS:
-            print('type=',m.atomtype, '   energy_min=',m.energy_min,  '    energy_max',m.energy_max)
-
 
     def normVpp(self,p1,p2,tol=None):
         """calculate norm vector for points in direction p1->p2"""

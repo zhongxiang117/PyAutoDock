@@ -41,13 +41,25 @@ class SetupMaps:
         library_filename(str)       : library file
         ligand_gpf_filename(str)    : grid parameter file
         receptor_mol_filename(str)  : file for receptor, it takes highest precedence
+
+        gpf (collections.OrderedDict):
+        EnergyMaps ( List(x(y(z(num_maps)))) ):
     """
-    def __init__(self,library_filename,ligand_gpf_filename,receptor_mol_filename=None,*args,**kwargs):
+    def __init__(
+            self,library_filename,ligand_gpf_filename,receptor_mol_filename=None,
+            nbc=None,eclamp=None,tol=None,gsize=None,eintcutoff=None,
+            *args,**kwargs
+        ):
         self.library_filename = library_filename
         self.receptor_mol_filename = receptor_mol_filename if receptor_mol_filename else None
         self.ligand_gpf_filename = ligand_gpf_filename
-        self.maps = []
-        self.tol = 0.00000001
+        self.nbc = nbc if nbc else 8
+        self.eclamp = eclamp if eclamp else 100000
+        self.tol = tol if tol else 0.00000001
+        self.gsize = gsize if gsize else 100
+        self.eintcutoff = eintcutoff if eintcutoff else 2047
+        self.gpf = None
+        self.EnergyMaps = None
         self.gen(tol=self.tol)
 
     def gen(self,tol=None):
@@ -124,20 +136,20 @@ class SetupMaps:
         dy = MOL.ymax - MOL.ymin
         dz = MOL.zmax - MOL.zmin
         rmax = pow(dx*dx+dy*dy+dz*dz,0.5)
-        points = int(rmax+0.6) * 100
+        points = int(rmax+0.6) * self.gsize
         if GPF.gpf['dielectric'] > 0:
             #TODO factor not known
             logger.info('Using a *constant* dielectric: {:}'.format(GPF.gpf['dielectric']))
             EPSTable = [1.0 for i in range(points)]
         else:
-            EPSTable = [calc_ddd_Mehler_Solmajer(i/100.0) for i in range(points)]
+            EPSTable = [calc_ddd_Mehler_Solmajer(i/self.gsize) for i in range(points)]
             EPSTable[0] = 1.0   # important
             logger.info('Using *distance-dependent* dielectric function of Mehler and Solmajer, Prot.Eng.4, 903-910.')
             if logger.level <= 10:
                 logger.debug('printout distance table\n')
                 print('   d     Dielectric')
                 for i in range(0,min(310,points),10):
-                    print('{:>5.1f} {:>9.2f}'.format(i/100,EPSTable[i]))
+                    print('{:>5.1f} {:>9.2f}'.format(i/self.gsize,EPSTable[i]))
             for i in range(len(EPSTable)):
                 EPSTable[i] = 332 / EPSTable[i]     # waiting on further check 332.06363
 
@@ -217,7 +229,6 @@ class SetupMaps:
                         )
                     )
 
-        EINTCLAMP = 100000
         EvdWHBondTable = [
             [
                 [0.0 for i in range(len(GPF.gpf['ligand_types']))]
@@ -236,15 +247,15 @@ class SetupMaps:
                 m.cA[j] = tmp * pow(m.nbp_r[j],m.xA[j]) * m.xB[j]
                 m.cB[j] = tmp * pow(m.nbp_r[j],m.xB[j]) * m.xA[j]
                 for k in range(1,points):   # care in here, starting from 1
-                    r = k / 100.0
+                    r = k / self.gsize
                     rA = pow(r,m.xA[j])
                     rB = pow(r,m.xB[j])
-                    EvdWHBondTable[k][j][i] = min(EINTCLAMP,m.cA[j]/rA-m.cB[j]/rB)
-                EvdWHBondTable[0][j][i] = EINTCLAMP
+                    EvdWHBondTable[k][j][i] = min(self.eclamp,m.cA[j]/rA-m.cB[j]/rB)
+                EvdWHBondTable[0][j][i] = self.eclamp
                 EvdWHBondTable[points-1][j][i] = 0.0
 
             # smooth
-            n = int(GPF.gpf['smooth'] * 100.0 / 2.0 + 0.6)
+            n = int(GPF.gpf['smooth'] * self.gsize / 2.0 + 0.6)
 
             if logger.level <= 10 and n > 0:
                 tmp = 'Before Smooth: ' if n > 0 else ''
@@ -263,7 +274,7 @@ class SetupMaps:
                 #print('  r      A         C         H         HD        N        NA        OA        SA')
                 #print(' ___ _________ _________ _________ _________ _________ _________ _________ _________')
                 for t in range(0,min(points,510),10):
-                    out = '{:4.1f} '.format(t/100)
+                    out = '{:4.1f} '.format(t/self.gsize)
                     for j in range(len(GPF.gpf['receptor_types'])):
                         out += '{:9.2f} '.format(EvdWHBondTable[t][j][i])
                     print(out)
@@ -274,7 +285,7 @@ class SetupMaps:
                 etmp = [0.0 for t in range(points)]
                 for j in range(len(GPF.gpf['receptor_types'])):
                     for k in range(points):
-                        etmp[k] = EINTCLAMP
+                        etmp[k] = self.eclamp
                         for s in range(max(0,k-n), min(points,k+n+1)):
                             etmp[k] = min(etmp[k], EvdWHBondTable[s][j][i])
                     for k in range(points):
@@ -297,7 +308,7 @@ class SetupMaps:
                 #print('  r      A         C         H         HD        N        NA        OA        SA')
                 #print(' ___ _________ _________ _________ _________ _________ _________ _________ _________')
                 for t in range(0,min(points,510),10):
-                    out = '{:4.1f} '.format(t/100)
+                    out = '{:4.1f} '.format(t/self.gsize)
                     for j in range(len(GPF.gpf['receptor_types'])):
                         out += '{:9.2f} '.format(EvdWHBondTable[t][j][i])
                     print(out)
@@ -527,7 +538,6 @@ class SetupMaps:
                             if vv < rmin:
                                 rmin = vv
                                 closestH = i
-                    d = [MOL.atoms[closestH][t+2]-c[t] for t in range(3)]
 
                     for ia,a in enumerate(MOL.atoms):
                         d = [a[t+2]-c[t] for t in range(3)]
@@ -536,8 +546,8 @@ class SetupMaps:
                         d = [t/r for t in d]
                         inv_rmax = 1.0 / max(r,0.5)
 
-                        index_r = min(int(r*100), 16383)        #TODO, NDIEL
-                        index_n = min(int(r*100), 2047)         #NEINT
+                        index_r = int(r*self.gsize)
+                        index_n = min(int(r*self.gsize), 2047)         #NEINT
 
                         if GPF.gpf['dielectric'] > 0:
                             #TODO test
@@ -546,7 +556,7 @@ class SetupMaps:
                             Emap[elecmap] += a[5] * inv_rmax * EPSTable[index_r] * estat
 
                         # NBC
-                        if r > 8: continue
+                        if r > self.nbc: continue
 
                         if Disorder_h and a[0].upper() == 'HD': continue
 
@@ -620,7 +630,7 @@ class SetupMaps:
                             if gmap.is_covalent: continue
                             atype = MOLATOMSINDEX[ia]
                             if gmap.hbond > 0:
-                                rsph = EvdWHBondTable[index_n][atype][idx] / 100.0
+                                rsph = EvdWHBondTable[index_n][atype][idx] / self.gsize
                                 if rsph < 0.0:
                                     rsph = 0.0
                                 elif rsph > 1.0:
@@ -658,6 +668,10 @@ class SetupMaps:
                     for idx in range(totmaps):
                         MAPS[idx].energy_max = max(MAPS[idx].energy_max, MAPS[idx].energy)
                         MAPS[idx].energy_min = max(MAPS[idx].energy_min, MAPS[idx].energy)
+
+        # get the things that we want
+        self.gpf = GPF.gpf
+        self.EnergyMaps = EnergyMaps
 
     def normVpp(self,p1,p2,tol=None):
         """calculate norm vector for points in direction p1->p2"""

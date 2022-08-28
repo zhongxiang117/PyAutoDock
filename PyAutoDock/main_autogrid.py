@@ -506,8 +506,8 @@ class SetupMaps:
 
         tmpnum = 1
 
-        elecmap = totmaps - 2
-        dsolmap = totmaps - 3
+        elecmap = totmaps - 1
+        dsolmap = totmaps - 2
         estat = LIB.e.FE_coeff_estat
         hnpts = [t//2 for t in GPF.gpf['npts']]
         for iz in range(-hnpts[2], hnpts[2]+1):
@@ -537,6 +537,7 @@ class SetupMaps:
 
                     pdb.set_trace()
                     print('>>closestH=',closestH,'     rmin=',rmin)
+                    for t in MAPS: t.energy = 0.0
 
                     for ia,a in enumerate(MOL.atoms):
                         d = [a[t+2]-c[t] for t in range(3)]
@@ -548,7 +549,7 @@ class SetupMaps:
                         index_r = min(int(r*100), 16383)        #TODO, NDIEL
                         index_n = min(int(r*100), 2047)         #NEINT
 
-                        print('d=',d,  '   inv_rmax=', inv_rmax, '   index_r=',index_r, '   index_n=',index_n)
+                        #print('d=',d,  '   inv_rmax=', inv_rmax, '   index_r=',index_r, '   index_n=',index_n)
 
                         if GPF.gpf['dielectric'] > 0:
                             #TODO test
@@ -556,7 +557,7 @@ class SetupMaps:
                         else:
                             MAPS[elecmap].energy += a[5] * inv_rmax * EPSTable[index_r] * estat
                         
-                        print('energy=',MAPS[elecmap].energy,' charge=',a[5])
+                        #print('energy=',MAPS[elecmap].energy,' charge=',a[5])
 
                         #if ia > 36: return
 
@@ -565,7 +566,7 @@ class SetupMaps:
 
                         if Disorder_h and a[0].upper() == 'HD': continue
 
-                        print('d=',d,  '   inv_rmax=', inv_rmax, '   index_r=',index_r, '   index_n=',index_n)
+                        #print('d=',d,  '   inv_rmax=', inv_rmax, '   index_r=',index_r, '   index_n=',index_n)
 
                         ha = HBONDTYPES[ia]
                         racc = 1.0
@@ -638,11 +639,11 @@ class SetupMaps:
                         par = LIB.get_atom_par(a[0])
                         qasp = GPF.gpf['qasp']
                         
-                        print('ia=',ia,'   ha=',ha,'  atype=',MOLATOMSINDEX[ia],'  racc=',racc,'  rdon=',rdon,'  Hramp=',Hramp)
-                        print('solpar_q=',qasp,'  vol=',par.vol, '  sol=',par.sol)
-                        print('EvdWHBONDTable=',EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][0],'   solfn=',ESolTable[index_r])
-                        print()
-                        pdb.set_trace()
+                        #print('ia=',ia,'   ha=',ha,'  atype=',MOLATOMSINDEX[ia],'  racc=',racc,'  rdon=',rdon,'  Hramp=',Hramp)
+                        #print('solpar_q=',qasp,'  vol=',par.vol, '  sol=',par.sol)
+                        #print('EvdWHBONDTable=',EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][0],'   solfn=',ESolTable[index_r])
+                        #print()
+                        #pdb.set_trace()
 
                         #if tmpnum > 100: return
                         #tmpnum += 1
@@ -650,32 +651,38 @@ class SetupMaps:
                         for idx in range(totmaps-2):
                             gmap = MAPS[idx]
                             if gmap.is_covalent: continue
+                            atype = MOLATOMSINDEX[ia]
+                            #print('genergy=',gmap.energy, end='     ')
                             if gmap.is_hbonder:
-                                rsph = EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][idx] / 100.0
+                                rsph = EvdWHBondTable[index_n][atype][idx] / 100.0
                                 if rsph < 0.0:
                                     rsph = 0.0
                                 elif rsph > 1.0:
                                     rsph = 1.0
+                                #print('rsph=',rsph, end='    ')
                                 if (gmap.hbond == 3 or gmap.hbond == 5) and (ha == 1 or ha == 2):
-                                    gmap.energy += EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][idx] * Hramp * (racc+(1.0-racc)*rsph)
+                                    gmap.energy += EvdWHBondTable[index_n][atype][idx] * Hramp * (racc+(1.0-racc)*rsph)
                                 elif gmap.hbond == 4 and (ha == 1 or ha == 2):
-                                    ene = EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][idx] * (racc+(1.0-racc)*rsph)
+                                    ene = EvdWHBondTable[index_n][atype][idx] * (racc+(1.0-racc)*rsph)
                                     hbondmin[idx] = min(hbondmin[idx],ene)
                                     hbondmax[idx] = max(hbondmax[idx],ene)
                                     hbondflag[idx] = True
                                 elif (gmap.hbond == 1 or gmap.hbond == 2) and ha > 2:
-                                    ene = EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][idx] * (rdon+(1.0-rdon)*rsph)
+                                    ene = EvdWHBondTable[index_n][atype][idx] * (rdon+(1.0-rdon)*rsph)
                                     hbondmin[idx] = min(hbondmin[idx],ene)
                                     hbondmax[idx] = max(hbondmax[idx],ene)
                                     hbondflag[idx] = True
                                 else:
-                                    gmap.energy += EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][idx]
+                                    gmap.energy += EvdWHBondTable[index_n][atype][idx]
                             else:
-                                gmap.energy += EvdWHBondTable[index_n][MOLATOMSINDEX[ia]][idx]
+                                gmap.energy += EvdWHBondTable[index_n][atype][idx]
 
                             gmap.energy += gmap.sol * par.vol * ESolTable[index_r] + \
                                     (par.sol+qasp*abs(a[5]))*gmap.vol*ESolTable[index_r]
+                            
+                            #print('genergy=',gmap.energy, )
                         
+                        # exclusively for dsolvation
                         MAPS[dsolmap].energy += qasp * par.vol * ESolTable[index_r]
 
                     # adjust maps of hydrogen-bonding atoms by adding largest and

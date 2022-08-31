@@ -1,0 +1,13 @@
+# exclusively for 
+
+npts 10  10  10                      # num.grid points in xyz
+spacing 1.0                       # spacing(A)
+receptor_types  H HS HD N C A OA SA OS NS NA S      # receptor atom types
+ligand_types    H HS HD N C A OA SA OS NS NA S      # ligand atom types
+gridcenter 32.961 7.86 27.277        # xyz-coordinates or auto
+smooth 0.5                           # store minimum energy w/in rad(A)
+elecmap receptor.e.map               # electrostatic potential map
+dsolvmap receptor.d.map              # desolvation potential map
+dielectric -0.1465                   # <0, AD4 distance-dep.diel;>0, constant
+
+

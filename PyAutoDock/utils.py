@@ -33,3 +33,48 @@ def calc_ddd_Mehler_Solmajer(distance,tol=None):
     return epsilon
 
 
+def read_map_data(file,exit_on_error=None):
+    """read map data in format: List(x(y(z(num_maps))))"""
+    xmax,ymax,zmax = 0,0,0
+    data = []
+    with open(file,'rt') as f:
+        for line in f:
+            line = line.strip()
+            if not len(line) or line[0] == '#': continue
+            ltmp = line.replace(',',' ').split()
+            try:
+                x = int(ltmp[0])
+                y = int(ltmp[1])
+                z = int(ltmp[2])
+                d = list(map(float,ltmp[3:]))
+            except (ValueError,IndexError):
+                if exit_on_error: break
+                continue
+            else:
+                xmax = max(x,xmax)
+                ymax = max(y,ymax)
+                zmax = max(z,zmax)
+                data.append(d)
+    if (xmax+1)*(ymax+1)*(zmax+1) != len(data):
+        return []
+    dx = (ymax+1) * (zmax+1)
+    dy = zmax + 1
+    return [
+        [[data[i*dx+j*dy+k] for k in range(zmax+1)] for j in range(ymax+1)]
+        for i in range(xmax+1)
+    ]
+
+
+def write_map_data(maps,file=None):
+    """write map data in format: `x,y,z,d1,d2, ...' """
+    if not file: file = 'maps.txt'
+    with open(file,'wt') as f:
+        for x in range(len(maps[0])):
+            for y in range(len(maps[0])):
+                for z in range(len(maps[0])):
+                    f.write('{:},{:},{:},{:}\n'.format(x,y,z,
+                        ','.join([str(t) for t in maps[x][y][z]]))
+                    )
+
+
+

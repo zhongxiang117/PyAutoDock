@@ -70,11 +70,48 @@ def write_map_data(maps,file=None):
     if not file: file = 'maps.txt'
     with open(file,'wt') as f:
         for x in range(len(maps[0])):
-            for y in range(len(maps[0])):
-                for z in range(len(maps[0])):
+            for y in range(len(maps[1])):
+                for z in range(len(maps[2])):
                     f.write('{:},{:},{:},{:}\n'.format(x,y,z,
                         ','.join([str(t) for t in maps[x][y][z]]))
                     )
+
+
+def write_table_vdW_hbond_data(table,file=None):
+    """write vdW hydrogen bond table data in format: `point,receptor_atomtype,ligand_atomtypes, ...' """
+    if not file: file = 'vdW-hbond-table.txt'
+    with open(file,'wt') as f:
+        for i in range(len(table)):
+            for j in range(len(table[i])):
+                    f.write('{:},{:},{:}\n'.format(i,j,
+                        ','.join(['{:}'.format(t) for t in table[i][j]]))
+                    )
+
+
+def read_table_vdW_hbond_data(file,exit_on_error=None):
+    """read map data in format: List(num_points(num_receptor_atomtypes(num_ligand_atomtypes)))"""
+    num_points,num_receptor_atomtypes = 0,0
+    data = []
+    with open(file,'rt') as f:
+        for line in f:
+            line = line.strip()
+            if not len(line) or line[0] == '#': continue
+            ltmp = line.replace(',',' ').split()
+            try:
+                x = int(ltmp[0])
+                y = int(ltmp[1])
+                d = list(map(float,ltmp[2:]))
+            except (ValueError,IndexError):
+                if exit_on_error: break
+                continue
+            else:
+                num_points = max(x,num_points)
+                num_receptor_atomtypes = max(y,num_receptor_atomtypes)
+                data.append(d)
+    if (num_points+1)*(num_receptor_atomtypes+1) < len(data):
+        return []
+    dx = num_receptor_atomtypes + 1
+    return [[data[i*dx+j] for j in range(num_receptor_atomtypes+1)] for i in range(num_points+1)]
 
 
 

@@ -34,7 +34,7 @@ class GridMap:
         self.hbonder = [0 for i in range(num_receptor_maps)]    # int
 
 
-class SetupMaps:
+class SetupGridMaps:
     """setup receptor/ligand interactions grid maps
 
     Args:
@@ -61,6 +61,10 @@ class SetupMaps:
         self.gpf = None
         self.EnergyMaps = None
         self.gen(tol=self.tol)
+    
+    def setup_library(self,library_filename=None):
+        if not library_filename: library_filename = self.library_filename
+        return SetupParLibrary(library_filename)
 
     def gen(self,tol=None):
         tol = tol if tol else 0.00000001

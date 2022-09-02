@@ -30,87 +30,87 @@ class GridMap:
 def setup_atomtypes_interaction_maps(
         referatomtypes,referpar,againstatomtypes=None,againstpar=None,loglevel=None
     ):
-        """Setup atomtypes interaction maps
+    """Setup atomtypes interaction maps
 
-        Maps can be calculated for self or cross interactions, for example:
-        If we have atomtypes:
-            referatomtypes = ['A','C','N']
-            againstatomtypes = ['O', 'S', 'P']
+    Maps can be calculated for self or cross interactions, for example:
+    If we have atomtypes:
+        referatomtypes = ['A','C','N']
+        againstatomtypes = ['O', 'S', 'P']
 
-        For cross-interaction maps:
-            ['A-O', 'A-S', 'A-P', 'C-O', 'C-S', 'C-P', 'N-O', 'N-S', 'N-P']
+    For cross-interaction maps:
+        ['A-O', 'A-S', 'A-P', 'C-O', 'C-S', 'C-P', 'N-O', 'N-S', 'N-P']
 
-        For self-interaction maps:
-            ['A-A', 'A-N', 'C-C', 'C-N', 'N-N']
-            Or: ['O-O', 'O-S', 'O-P', 'S-S', 'S-P', 'P-P']
+    For self-interaction maps:
+        ['A-A', 'A-N', 'C-C', 'C-N', 'N-N']
+        Or: ['O-O', 'O-S', 'O-P', 'S-S', 'S-P', 'P-P']
 
-        Sequences are correspondent with the inputs
-        Detail info will be printout if loglevel<=10
-        """
-        if againstatomtypes:
-            num_maps = len(againstatomtypes)
-            fitatomtypes = [againstatomtypes for i in range(num_maps)]
-            fitpar = [againstpar for i in range(num_maps)]
-        else:
-            # means self
-            num_maps = len(referatomtypes)
-            fitatomtypes = [referatomtypes[i:] for i in range(num_maps)]
-            fitpar = [referpar[i:] for i in range(num_maps)]
+    Sequences are correspondent with the inputs
+    Detail info will be printout if loglevel<=10
+    """
+    if againstatomtypes:
+        num_maps = len(againstatomtypes)
+        fitatomtypes = [againstatomtypes for i in range(num_maps)]
+        fitpar = [againstpar for i in range(num_maps)]
+    else:
+        # means self
+        num_maps = len(referatomtypes)
+        fitatomtypes = [referatomtypes[i:] for i in range(num_maps)]
+        fitpar = [referpar[i:] for i in range(num_maps)]
 
-        MAPS = []
-        for i in range(len(referatomtypes)):
-            m = GridMap(num_receptor_maps=num_maps)
-            m.atomtype = referatomtypes[i]
-            par = referpar[i]
-            m.sol = par.sol
-            m.vol = par.vol
-            m.Rij = par.Rij
-            m.epsij = par.epsij
-            m.hbond = par.hbond
-            m.Rij_hb = par.Rij_hb
-            m.epsij_hb = par.epsij_hb
-            m.num_cmaps = len(fitatomtypes[i])
-            for j in range(len(fitatomtypes[i])):
-                p = fitpar[i][j]
-                m.catomtypes[j] = fitatomtypes[i][j]
-                m.nbp_r[j] = (m.Rij + p.Rij) / 2.0
-                m.nbp_eps[j] = pow(m.epsij*p.epsij, 0.5)
-                m.xA[j] = 12
-                m.xB[j] = 6
-                if m.hbond > 2 and p.hbond in [1,2]:
-                    m.xB[j] = 10
-                    m.hbonder[j] = True
-                    m.nbp_r[j] = m.Rij_hb
-                    m.nbp_eps[j] = m.epsij_hb
-                elif m.hbond in [1,2] and p.hbond > 2:
-                    m.xB[j] = 10
-                    m.hbonder[j] = True
-                    m.nbp_r[j] = p.Rij_hb
-                    m.nbp_eps[j] = p.epsij_hb
-            MAPS.append(m)
+    MAPS = []
+    for i in range(len(referatomtypes)):
+        m = GridMap(num_receptor_maps=num_maps)
+        m.atomtype = referatomtypes[i]
+        par = referpar[i]
+        m.sol = par.sol
+        m.vol = par.vol
+        m.Rij = par.Rij
+        m.epsij = par.epsij
+        m.hbond = par.hbond
+        m.Rij_hb = par.Rij_hb
+        m.epsij_hb = par.epsij_hb
+        m.num_cmaps = len(fitatomtypes[i])
+        for j in range(len(fitatomtypes[i])):
+            p = fitpar[i][j]
+            m.catomtypes[j] = fitatomtypes[i][j]
+            m.nbp_r[j] = (m.Rij + p.Rij) / 2.0
+            m.nbp_eps[j] = pow(m.epsij*p.epsij, 0.5)
+            m.xA[j] = 12
+            m.xB[j] = 6
+            if m.hbond > 2 and p.hbond in [1,2]:
+                m.xB[j] = 10
+                m.hbonder[j] = True
+                m.nbp_r[j] = m.Rij_hb
+                m.nbp_eps[j] = m.epsij_hb
+            elif m.hbond in [1,2] and p.hbond > 2:
+                m.xB[j] = 10
+                m.hbonder[j] = True
+                m.nbp_r[j] = p.Rij_hb
+                m.nbp_eps[j] = p.epsij_hb
+        MAPS.append(m)
 
-        if loglevel and loglevel <= 10:
-            print()
-            for i,a in enumerate(referatomtypes):
-                m = MAPS[i]
-                print('\nFor ligand type: {:}'.format(a))
+    if loglevel and loglevel <= 10:
+        print()
+        for i,a in enumerate(referatomtypes):
+            m = MAPS[i]
+            print('\nFor ligand type: {:}'.format(a))
+            print(
+                'hbond={:}, sol={:.8f}, vol={:.6f}, Rij={:.3f}, '
+                'epsij={:.4f}, Rij_hb={:.4f}, epsij_hb={:.4f}'.format(
+                    m.hbond, m.sol, m.vol, m.Rij, m.epsij,
+                    m.Rij_hb, m.epsij_hb
+                )
+            )
+            for j in range(num_maps):
                 print(
-                    'hbond={:}, sol={:.8f}, vol={:.6f}, Rij={:.3f}, '
-                    'epsij={:.4f}, Rij_hb={:.4f}, epsij_hb={:.4f}'.format(
-                        m.hbond, m.sol, m.vol, m.Rij, m.epsij,
-                        m.Rij_hb, m.epsij_hb
+                    '>> receptor_atomtype={:}, hbonder={:}, xA={:}, xB={:}, '
+                    'nbp_r={:.4f}, nbp_eps={:.4f}'.format(m.catomtypes[j],
+                        m.hbonder[j], m.xA[j], m.xB[j], m.nbp_r[j], m.nbp_eps[j]
                     )
                 )
-                for j in range(num_maps):
-                    print(
-                        '>> receptor_atomtype={:}, hbonder={:}, xA={:}, xB={:}, '
-                        'nbp_r={:.4f}, nbp_eps={:.4f}'.format(m.catomtypes[j],
-                            m.hbonder[j], m.xA[j], m.xB[j], m.nbp_r[j], m.nbp_eps[j]
-                        )
-                    )
-            print()
+        print()
 
-        return MAPS
+    return MAPS
 
 
 def setup_eps_table(num_points, gridsize=None,is_distance=True,loglevel=None):
@@ -170,8 +170,8 @@ def setup_vdW_hbond_table(
             out = '>> {:>3}-'.format(MAPS[i].atomtype)
             cn = MAPS[i].num_cmaps
             for j in range(cn):
-                tmpa = 'cA={:.2f} / {:}'.format(MAPS[i].cA[j],MAPS[i].xA[j])
-                tmpb = 'cB={:.2f} / {:}'.format(MAPS[i].cB[j],MAPS[i].xB[j])
+                tmpa = 'cA={:.4f} / {:}'.format(MAPS[i].cA[j],MAPS[i].xA[j])
+                tmpb = 'cB={:.4f} / {:}'.format(MAPS[i].cB[j],MAPS[i].xB[j])
                 print(out+'{:<3}   {:30}   {:}'.format(MAPS[i].catomtypes[j],tmpa,tmpb))
 
             print('>> Atomtype: {:}'.format(MAPS[i].atomtype))
@@ -204,8 +204,8 @@ def setup_vdW_hbond_table(
                 out = '>> {:>3}-'.format(MAPS[i].atomtype)
                 cn = MAPS[i].num_cmaps
                 for j in range(cn):
-                    tmpa = 'cA={:.2f} / {:}'.format(MAPS[i].cA[j],MAPS[i].xA[j])
-                    tmpb = 'cB={:.2f} / {:}'.format(MAPS[i].cB[j],MAPS[i].xB[j])
+                    tmpa = 'cA={:.4f} / {:}'.format(MAPS[i].cA[j],MAPS[i].xA[j])
+                    tmpb = 'cB={:.4f} / {:}'.format(MAPS[i].cB[j],MAPS[i].xB[j])
                     print(out+'{:<3}   {:30}   {:}'.format(MAPS[i].catomtypes[j],tmpa,tmpb))
 
                 print('>> Atomtype: {:}'.format(MAPS[i].atomtype))

@@ -103,20 +103,18 @@ class SetupDockMaps:
             # one level up
             MAPS.append(m)
 
-        gridsize = 100
-        # smooth
-        num_smooth = int(DPF.dpf['smooth'] * gridsize / 2.0 + 0.6)
-
         if loglevel and loglevel <= 10:
-            txt = 'Before Smooth: ' if num_smooth and num_smooth > 0 else ''
             for i in range(len(MAPS)):       # index i is super important, be careful
-                print('\n{:}Pairwise interactions:'.format(txt))
+                print('\nPairwise interactions:')
                 out = '>> {:>3}-'.format(MAPS[i].atomtype)
                 cn = MAPS[i].num_cmaps
                 for j in range(cn):
                     tmpa = 'cA={:.4f} / {:}'.format(MAPS[i].cA[j],MAPS[i].xA[j])
                     tmpb = 'cB={:.4f} / {:}'.format(MAPS[i].cB[j],MAPS[i].xB[j])
-                    print(out+'{:<3}   {:30}   {:}'.format(MAPS[i].catomtypes[j],tmpa,tmpb))
+                    if MAPS[i].hbonder[j]:
+                        print(out+'{:<3}   {:30}   {:}  (HBond)'.format(MAPS[i].catomtypes[j],tmpa,tmpb))
+                    else:
+                        print(out+'{:<3}   {:30}   {:}'.format(MAPS[i].catomtypes[j],tmpa,tmpb))
 
         EvdWHBondTable = [
             [[0.0 for k in range(num_maps)] for j in range(num_maps)]
@@ -126,20 +124,86 @@ class SetupDockMaps:
             [[0.0 for k in range(num_maps)] for j in range(num_maps)]
             for i in range(num_points)
         ]
-        for i in range(1,num_points):     # index i starts at 1
+        # format:
+        #   for j Ligand_types:
+        #       for i in Ligand_types:
+        #           EnergyTable[points][i][j]
+        for i in range(1,num_points):           # index i starts at 1
             r = index2distance(i)       #TODO
             for j,m in enumerate(MAPS):
                 for n in range(m.num_cmaps):
+                    x = n + j                   # the offset
                     rA = pow(r, m.xA[n])
                     rB = pow(r, m.xB[n])
-                    EvdWHBondTable[i][n][j] = min(self.eclamp, m.cA[n]/rA-m.cB[n]/rB)
-                    EvdWHBondTable[i][j][n] = EvdWHBondTable[i][n][j]
-                    EvdWHNonBondTable[i][n][j] = min(self.eclamp, 392586.8/rA) - r      #TODO
-                    EvdWHNonBondTable[i][j][n] = EvdWHNonBondTable[i][n][j]
-                # clamp them
-                EvdWHBondTable[0][j][n] = EvdWHBondTable[0][n][j] = self.eclamp
-                EvdWHNonBondTable[0][j][n] = EvdWHNonBondTable[0][n][j] = self.eclamp
-        
+                    EvdWHBondTable[i][x][j] = min(self.eclamp, m.cA[n]/rA-m.cB[n]/rB)
+                    EvdWHBondTable[i][j][x] = EvdWHBondTable[i][x][j]
+                    EvdWHNonBondTable[i][x][j] = min(self.eclamp, 392586.8/rA) - r      #TODO `392586.8`
+                    EvdWHNonBondTable[i][j][x] = EvdWHNonBondTable[i][x][j]
+                    # clamp them
+                    EvdWHBondTable[0][j][x] = EvdWHBondTable[0][x][j] = self.eclamp
+                    EvdWHNonBondTable[0][j][x] = EvdWHNonBondTable[0][x][j] = self.eclamp
+            
+        print('\n\nBefore Smooth: For Energy interactions:')
+        for i in range(num_maps):
+            ai = MAPS[i].atomtype
+            for j in range(i,num_maps):
+                aj = MAPS[i].catomtypes[j-i]
+                n = 0       # important
+                print(f'{ai}-{aj}:')
+                while n < num_points:
+                    r = index2distance(n)
+                    if n == 0:      # this sequence cannot be changed
+                        d = 100
+                    elif n % 100000 == 0:
+                        d = 100000
+                    elif n % 10000 == 0:
+                        d = 10000
+                    elif n % 1000 == 0:
+                        d = 1000
+                    else:
+                        d = 100
+                    print(
+                        'n={:6}, r={:10.6f},   internal= {:15.6f},   ubound= {:15.6f}'.format(
+                            n,r,EvdWHBondTable[n][j][i],EvdWHNonBondTable[n][j][i]
+                        )
+                    )
+                    n += d
+                print('\n\n')
+
+        # smooth
+        num_smooth = int(DPF.dpf['smooth'] * self.gsize / 2.0 + 0.6)
+
+        if num_smooth > 0:
+            for i in range(num_points):
+                r = index2distance(i)       #TODO
+                rlo = r - DPF.dpf['smooth']/2
+                rhi = r + DPF.dpf['smooth']/2
+
+
+
+            etmp = [0.0 for t in range(num_points)]
+            for j in range(len(DPF.dpf['ligand_types'])):
+                for k in range(num_points):
+                    etmp[k] = self.eclamp
+                    for s in range(max(0,k-n), min(num_points,k+n+1)):
+                        etmp[k] = min(etmp[k], EvdWHBondTable[s][j][i])
+                for k in range(num_points):
+                    EvdWHBondTable[k][j][i] = etmp[k]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         infolist = self.printminvalue(EvdWHBondTable,MAPS)
         for i in infolist: print(i)
 

@@ -63,7 +63,7 @@ class SetupDockMaps:
             if not LIB.get_atom_par(a):
                 logger.critical('not defined: receptor atomtype: {:}'.format(a))
 
-        num_points = 2000
+        num_points = 2048
 
         MAPS = []
         num_maps = len(DPF.dpf['ligand_types'])
@@ -125,7 +125,7 @@ class SetupDockMaps:
             for i in range(num_points)
         ]
         # format:
-        #   for j Ligand_types:
+        #   for j in Ligand_types:
         #       for i in Ligand_types:
         #           EnergyTable[points][i][j]
         for i in range(1,num_points):           # index i starts at 1
@@ -171,32 +171,65 @@ class SetupDockMaps:
                 print('\n\n')
 
         # smooth
-        num_smooth = int(DPF.dpf['smooth'] * self.gsize / 2.0 + 0.6)
+        if DPF.dpf['smooth'] > 0:
+            d = DPF.dpf['smooth'] / 2.0
+            for m in range(num_maps):
+                for n in range(m,num_maps):
+                    etmpH = [0.0 for t in range(num_points)]
+                    etmpN = [0.0 for t in range(num_points)]
+                    for i in range(num_points):
+                        etmpH[i] = self.eclamp
+                        etmpN[i] = self.eclamp
+                        r = index2distance(i)       #TODO
+                        rlo = r - d
+                        rhi = r + d
+                        b = rlo*rlo*32
+                        e = rhi*rhi*32
+                        b = min(int(b), 2047)
+                        e = min(int(e), 2047)
+                        for j in range(max(0,b), min(e+1,2048)):
+                            etmpH[i] = min(etmpH[i], EvdWHBondTable[j][n][m])
+                            etmpN[i] = min(etmpN[i], EvdWHNonBondTable[j][n][m])
+                    for i in range(num_points):
+                        EvdWHBondTable[i][n][m] = EvdWHBondTable[i][m][n] = etmpH[i]
+                        EvdWHNonBondTable[i][n][m] = EvdWHNonBondTable[i][m][n] = etmpN[i]
 
-        if num_smooth > 0:
-            for i in range(num_points):
-                r = index2distance(i)       #TODO
-                rlo = r - DPF.dpf['smooth']/2
-                rhi = r + DPF.dpf['smooth']/2
+            print('After Smooth: For Energy interactions:')
+            for i in range(num_maps):
+                ai = MAPS[i].atomtype
+                for j in range(i,num_maps):
+                    aj = MAPS[i].catomtypes[j-i]
+                    n = 0       # important
+                    print(f'{ai}-{aj}:')
+                    while n < num_points:
+                        r = index2distance(n)
+                        if n == 0:      # this sequence cannot be changed
+                            d = 100
+                        elif n % 100000 == 0:
+                            d = 100000
+                        elif n % 10000 == 0:
+                            d = 10000
+                        elif n % 1000 == 0:
+                            d = 1000
+                        else:
+                            d = 100
+                        print(
+                            'n={:6}, r={:10.6f},   internal= {:15.6f},   ubound= {:15.6f}'.format(
+                                n,r,EvdWHBondTable[n][j][i],EvdWHNonBondTable[n][j][i]
+                            )
+                        )
+                        n += d
+                    print('\n\n')
 
+        # for `fld` file
+        Field = {
+            'spacing' : 0.375,
+            'npts'    : [60, 60, 60],
+            'center'  : [32.192, 14.174, 25.076],
+            'macromolecule' : '1dwd_rec.pdbqt',
+        }
 
-
-            etmp = [0.0 for t in range(num_points)]
-            for j in range(len(DPF.dpf['ligand_types'])):
-                for k in range(num_points):
-                    etmp[k] = self.eclamp
-                    for s in range(max(0,k-n), min(num_points,k+n+1)):
-                        etmp[k] = min(etmp[k], EvdWHBondTable[s][j][i])
-                for k in range(num_points):
-                    EvdWHBondTable[k][j][i] = etmp[k]
-
-
-
-
-
-
-
-
+        
 
 
 

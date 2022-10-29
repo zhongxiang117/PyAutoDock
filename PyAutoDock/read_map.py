@@ -1,6 +1,10 @@
 import os
 
 class ReadMap:
+    """Read Map Files
+    
+    data format: [z[y[x[float]]]]
+    """
     def __init__(
         self,mapfile=None,npts=None,*args,**kws
     ):
@@ -46,12 +50,14 @@ class ReadMap:
             print('Error: number of data inside map is not equal to defined points')
             return []
         print(f'Note: read total number of {len(data)} points')
-        return data
-
-
-    def _split(self,data,npts):
-        
-
+        print(f'Note: minimum energy: {min(data)}')
+        print(f'Note: maximum energy: {max(data)}')
+        dx, dy, dz = npts[0]+1, npts[1]+1, npts[2]+1
+        prodata = [
+            [[data[x+y*dy+z*dz] for x in range(dx)] for y in range(dy)]
+            for z in range(dz)
+        ]
+        return prodata
 
 
 

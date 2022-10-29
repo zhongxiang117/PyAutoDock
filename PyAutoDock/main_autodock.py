@@ -5,6 +5,7 @@ from PyAutoDock.setup_par_library import SetupParLibrary
 from PyAutoDock.utils import file_gen_new, calc_ddd_Mehler_Solmajer
 from PyAutoDock.setup_maps import GridMap
 from PyAutoDock.main_autogrid import SetupGridMaps
+from PyAutoDock.read_map import ReadMap
 
 import math
 
@@ -228,8 +229,11 @@ class SetupDockMaps:
             'center'  : [32.192, 14.174, 25.076],
             'macromolecule' : '1dwd_rec.pdbqt',
         }
+        fn = ReadMap()
+        # format: map[z[y[x[float]]]]
+        Emaps = [fn.read_map_from_autodock(m) for m in DPF.dpf['map']]
 
-        
+
 
 
 

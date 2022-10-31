@@ -146,3 +146,194 @@ class ReadPDBQT:
             self.info()
 
 
+class ReadPDBQTLigand:
+    #TODO add default atomtypes, found in library
+    def __init__(self,filename=None,*args,**kws):
+        self.filename = filename
+        self.proline = []
+        self.tlist = []
+
+    def read(self,filename=None):
+        """read ligand pdbqt file
+        
+        Return:
+            proline : List[(x,y,z,charge,atomname,atomtype), ...]
+            tlist   : List[[branch_begin_index, branch_end_index, i1, i2, ...], ...]
+            m       : int   :   TORSDOF: number of freedom of torsions
+
+        Note:
+            when error happens, return values will be: `[], [], 0`
+
+        Test:
+            case 1: R, B, B, EB, EB, ER     (good)
+            case 2: R, ER, B, EB, B, EB     (good)
+            case 3: R, B, ER, EB, ...       (wrong, ER cannot be in-between)
+            case 4: B, EB, ...              (wrong, no ROOT found)
+            case 5: B, EB, R, ER, ...       (wrong, ROOT should be in first)
+            case 6: EB, B, ...              (wrong, no ROOT found)
+            case 7: R, B, EB, EB, ...       (wrong, BRANCH closed multiple times)
+            case 8: R, EB, B, ...           (wrong, BRANCH closed earlier)
+            case 9: R, ER, ER, ...          (wrong, ROOT closed multiple times)
+        """
+        if not filename: filename = self.filename
+        if isinstance(filename, list):
+            flines = filename
+        elif os.path.isfile(filename):
+            with open(filename,'rt') as f:
+                flines = f.readlines()
+        else:
+            print(f'Error: file is not set: either can be a file or 2D-list')
+            return [],[],0
+        proline = []
+        r = -1          # index for `ROOT` and `ENDROOT`
+        k = -1          # index for `BRANCH` and `ENDBRANCH`
+        b = e = None    # anchors for `BRANCH` and `ENDBRANCH`
+        n = -1          # index for `ATOM` and `HETATM`
+        tdict = {}      # temporary helper list
+        tlist = []      # results
+        m = None        # number for `TORSDOF`
+        boroot = False
+        ndxlist = []    # for check of ROOT/ENDROOT in-between
+        for l in flines:
+            if len(l) >= 4:
+                s = l[:4].lower()
+                if s == 'root':
+                    r += 1
+                    boroot = True
+                    ndxlist.append('R')
+                elif s == 'endr':
+                    r -= 1
+                    ndxlist.append('ER')
+                elif s in ['atom','heta']:
+                    n += 1
+                    try:
+                        atomname = l[12:16].strip()
+                        x = float(l[30:38])
+                        y = float(l[38:46])
+                        z = float(l[46:54])
+                        c = float(l[68:76])
+                        atomtype = l[77:79].strip().upper()
+                    except (ValueError,IndexError):
+                        print(f'Error: line input: {l}')
+                        return [],[],0
+                    else:
+                        #TODO when atomtype not found, get it from atomname
+                        proline.append((x,y,z,c,atomname,atomtype))
+                elif s == 'bran':
+                    ndxlist.append('B')
+                    k += 1
+                    ls = l.split()
+                    try:
+                        if len(ls) != 3:
+                            raise ValueError('Error: BRANCH: wrong settings')
+                        b = int(ls[1])
+                        e = int(ls[2])
+                        if b > n+1 or e < n+1:
+                            raise ValueError('Error: BRANCH: values are not correspondant')
+                    except (ValueError,IndexError) as e:
+                        print(f'Error: line input: BRANCH should have anchors: {l}\n  -> {e}')
+                        return [],[],0
+                elif s == 'endb':
+                    ndxlist.append('EB')
+                    k -= 1
+                elif s == 'tors':
+                    if m:
+                        print(f'Error: duplicate line: {l}')
+                        return [],[],0
+                    ls = l.split()
+                    try:
+                        if len(ls) != 2:
+                            raise ValueError('Error: TORSDOF: wrong setting')
+                        m = int(ls[1])
+                    except (ValueError,IndexError) as e:
+                        print(f'Error: line input: {l}\n  -> {e}')
+                        return [],[],0
+                if k < -1:
+                    print(f'Error: double ends: {l}')
+                    return [],[],0
+                elif k == -1:
+                    if tdict:
+                        v = 0
+                        while v in tdict:
+                            q = v + 1
+                            ls = tdict[v]
+                            while q in tdict:
+                                ls.extend(tdict[q][2:])     # in-place edition
+                                q += 1
+                            v += 1
+                        for v in sorted(tdict.keys()):
+                            tlist.append(
+                                tdict[v][:2] + sorted(list(set(tdict[v][2:])))
+                            )
+                        tdict = {}      # reset
+                elif k in tdict:
+                    tdict[k].append(n)
+                else:
+                    tdict[k] = [b-1,e-1]      # k controlled `b` and `e` values
+                if r > 0:
+                    print(f'Error: ROOT cannot be nested: {l}')
+                    return [],[],0
+                elif r < -1:
+                    print(f'Error: ENDROOT: not-included: {l}')
+                    return [],[],0
+        if not tlist:
+            print('Warning: no entry is found')
+            return [],[],0
+        if not boroot:
+            print(f'Error: no ROOT entry is found')
+            return [],[],0
+        if r != -1:     # sequence matters, should be after `boroot`
+            print(f'Error: ROOT is not closed')
+            return [],[],0
+        if m is None:
+            print('Warning: TORSDOF: not set: number of freedom of torsions')
+        elif m != len(tlist):
+            print('Warning: number of freedom of torsions is not equal to defined entries')
+            print(f'    ->: TORSDOF:{m}   !=   Defines:{len(tlist)}')
+        for e in tlist:
+            if e[1] not in e[2:]:
+                print(f'Error: BRANCH: anchor is not correct: {e[0]}  {e[1]}')
+                return [],[],0
+        while True:
+            if 'R' not in ndxlist:
+                break
+            i = ndxlist.index('R')
+            j = ndxlist.index('ER')
+            g = ndxlist[i:j+1].count('B')
+            if g and (j-i-1) // g != 2:
+                print('Error: ROOT/ENDROOT: cannot be in-between BRANCH')
+                return [],[],0
+            ndxlist.pop(i)
+            ndxlist.pop(j-1)
+        self.proline = proline
+        self.tlist = tlist
+        return proline,tlist,len(tlist)
+
+    def info(self):
+        if not self.proline: return
+        ct = sum([i[3] for i in self.proline])
+        if abs(ct-round(ct,0)) > 0.01:
+            print(f'Warning: total charge {ct} is not an integer number')
+        tdict = {}
+        for l in self.proline:
+            if l[5] in tdict:
+                tdict[l[5]] += 1
+            else:
+                tdict[l[5]] = 1
+        print()
+        for k in sorted(tdict.keys()):
+            print('Note: number of entries for atomtype {:}: {:}'.format(k,tdict[k]))
+        print('\nTorsion Tree:\n #  Atom1--Atom2  Moved  List of Atoms Moved')
+        print('___ ____________ ______ ______________________________________')
+        for i,t in enumerate(self.tlist):
+            print(
+                '{:^3} {:^5}--{:^5} {:^6} {:}'.format(i+1,t[0],t[1],len(t[2:]),
+                ', '.join([self.proline[j][4] for j in t[2:]]))
+            )
+        print()
+
+
+
+
+
+
